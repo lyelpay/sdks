@@ -1,0 +1,72 @@
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Dependency dirs / lockfiles
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+.pnp.*
+
+# Build output
+dist/
+.turbo/
+.next/
+coverage/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env / secrets
+.env
+.env.*
+
+# npm / CodeArtifact auth
+.npmrc
+*.npmrc
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Node / package managers
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+.pnp.*
+
+# Build artifacts
+dist/
+.turbo/
+.next/
+coverage/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Logs / diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env / secrets
+.env
+.env.*
+
+# AWS / CodeArtifact creds
+.npmrc
+*.npmrc
+
+

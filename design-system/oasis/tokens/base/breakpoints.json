@@ -1,0 +1,10 @@
+{
+  "breakpoint": {
+    "xs": { "value": "0px", "description": "Extra small (phones)" },
+    "sm": { "value": "576px", "description": "Small (large phones)" },
+    "md": { "value": "768px", "description": "Medium (tablets)" },
+    "lg": { "value": "992px", "description": "Large (small laptops)" },
+    "xl": { "value": "1200px", "description": "Extra large (desktops)" },
+    "xxl": { "value": "1400px", "description": "2X large (wide)" }
+  }
+}

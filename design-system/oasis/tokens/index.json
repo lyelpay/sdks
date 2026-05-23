@@ -1,0 +1,3 @@
+{
+  "description": "Oasis design tokens index. Build reads tokens/base/*.json and outputs dist/scss (web) and dist/tokens (TS for mobile)."
+}

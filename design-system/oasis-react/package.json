@@ -1,0 +1,58 @@
+{
+  "name": "@lyel/oasis-react",
+  "version": "1.0.0",
+  "description": "Lyel Oasis React – design system components (Next 16, CVE-safe). Tokens from @lyel/oasis.",
+  "license": "UNLICENSED",
+  "private": false,
+  "author": "Nestor TCHISSAMBOT MAKOSSO",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./styles": "./dist/styles.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && npm run build:css",
+    "build:lib": "tsup && npm run build:css",
+    "build:tokens": "cd ../oasis && node build/run.mjs",
+    "build:css": "node build/copy-styles.mjs",
+    "dev": "next dev --port 4000",
+    "clean": "rm -rf dist .next",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" \"app/**/*.{ts,tsx,css}\" \"build/**/*.mjs\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\" \"app/**/*.{ts,tsx,css}\" \"build/**/*.mjs\" \"*.{json,md}\""
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@lyel/oasis": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.15.0",
+    "eslint-config-next": "16.0.10",
+    "eslint-config-prettier": "^9.1.0",
+    "next": "16.0.10",
+    "prettier": "^3.4.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "registry": "https://lyel-packages-023704516286.d.codeartifact.eu-west-3.amazonaws.com/npm/lyel-libraries/"
+  }
+}

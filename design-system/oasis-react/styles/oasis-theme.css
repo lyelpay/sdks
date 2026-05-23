@@ -1,0 +1,57 @@
+/**
+ * Oasis theme – CSS custom properties from @lyel/oasis tokens.
+ * Import this in your app or use @lyel/oasis-react/styles.
+ */
+:root {
+  /* Colors */
+  --oasis-primary: #08313A;
+  --oasis-primary-foreground: #FFFFFF;
+  --oasis-secondary: #FE6A49;
+  --oasis-secondary-foreground: #FFFFFF;
+  --oasis-background: #F8FAF9;
+  --oasis-foreground: #1A1A1A;
+  --oasis-muted: #F2F4F6;
+  --oasis-muted-foreground: #808080;
+  --oasis-border: #E7ECEB;
+  --oasis-destructive: #D9534F;
+  --oasis-white: #FFFFFF;
+  --oasis-black: #000000;
+  --oasis-gray: #808080;
+
+  /* Radius */
+  --oasis-radius-none: 0;
+  --oasis-radius-sm: 4px;
+  --oasis-radius-md: 8px;
+  --oasis-radius-lg: 12px;
+  --oasis-radius-xl: 16px;
+  --oasis-radius-full: 9999px;
+
+  /* Spacing */
+  --oasis-spacing-1: 4px;
+  --oasis-spacing-2: 8px;
+  --oasis-spacing-3: 12px;
+  --oasis-spacing-4: 16px;
+  --oasis-spacing-5: 20px;
+  --oasis-spacing-6: 24px;
+  --oasis-spacing-8: 32px;
+  --oasis-spacing-10: 40px;
+  --oasis-spacing-12: 48px;
+
+  /* Typography */
+  --oasis-font-sans: system-ui, -apple-system, sans-serif;
+  --oasis-font-mono: ui-monospace, monospace;
+  --oasis-text-xs: 12px;
+  --oasis-text-sm: 14px;
+  --oasis-text-base: 16px;
+  --oasis-text-lg: 18px;
+  --oasis-text-xl: 20px;
+  --oasis-text-2xl: 24px;
+
+  /* Shadows */
+  --oasis-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --oasis-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  --oasis-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+
+  /* Transitions */
+  --oasis-transition: 150ms ease;
+}
