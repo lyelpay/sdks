@@ -1,0 +1,10 @@
+# Ne pas publier ces fichiers sur npm
+src/
+test/
+docs/
+examples/
+tsconfig.json
+rollup.config.mjs
+*.ts
+!.d.ts
+.gitignore

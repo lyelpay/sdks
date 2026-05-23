@@ -1,0 +1,259 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --primary: #6C47FF;
+  --primary-hover: #5a38d6;
+  --danger: #e53e3e;
+  --success: #38a169;
+  --text: #1a202c;
+  --muted: #718096;
+  --border: #e2e8f0;
+  --bg: #ffffff;
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#app {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px 24px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.logo-text {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.merchant-info {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.merchant-name {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.amount-display {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.screen-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.screen-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-family: var(--font);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+input:focus {
+  border-color: var(--primary);
+}
+
+input.otp-input {
+  text-align: center;
+  letter-spacing: 8px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.btn {
+  width: 100%;
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px;
+  margin-top: 8px;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+}
+
+.error-message {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.result-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 28px;
+}
+
+.result-icon.success {
+  background: #f0fff4;
+  color: var(--success);
+}
+
+.result-icon.failed {
+  background: #fff5f5;
+  color: var(--danger);
+}
+
+.result-title {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.result-message {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.resend-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.resend-link {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.resend-link:hover {
+  text-decoration: underline;
+}
+
+.sandbox-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-bottom: 16px;
+}
