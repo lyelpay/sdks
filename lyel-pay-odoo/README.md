@@ -23,8 +23,8 @@ Search "Lyel Pay" in **Apps**, click Install.
 ### From source
 
 ```bash
-git clone https://github.com/lyelpay/lyel-pay-odoo.git
-cp -r lyel-pay-odoo/payment_lyel_pay /path/to/your/odoo/addons/
+git clone https://github.com/lyelpay/sdks.git
+cp -r sdks/lyel-pay-odoo/payment_lyel_pay /path/to/your/odoo/addons/
 ```
 
 Restart Odoo, update the Apps list, install **Lyel Pay**.
