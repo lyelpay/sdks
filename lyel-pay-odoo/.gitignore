@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.DS_Store
+
+# Docker volumes (managed by docker-compose)
+.docker/
+
+# Odoo local data
+filestore/
+sessions/
+addons-extra/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Build artefacts
+dist/
+build/

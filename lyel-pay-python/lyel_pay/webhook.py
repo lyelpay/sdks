@@ -12,6 +12,15 @@ TOLERANCE_SECONDS = 300
 
 @dataclass
 class WebhookEvent:
+    """A verified webhook event delivered by Lyel Pay.
+
+    Attributes:
+        id: Unique event identifier (e.g. ``evt_...``).
+        type: Event type (e.g. ``payment_intent.succeeded``).
+        created: Unix timestamp (seconds) at which the event was emitted.
+        data: Event payload. The shape depends on ``type``.
+    """
+
     id: str
     type: str
     created: int
@@ -19,6 +28,13 @@ class WebhookEvent:
 
 
 class WebhookVerifier:
+    """Verify and parse webhook payloads delivered by Lyel Pay.
+
+    Webhook requests carry a ``Lyel-Signature`` header of the form
+    ``t=<timestamp>,v1=<hex_signature>``. The signature is an HMAC-SHA256
+    of ``"<timestamp>.<raw_body>"`` keyed by the webhook secret.
+    """
+
     def construct_event(
         self,
         payload: str | bytes,
@@ -26,6 +42,33 @@ class WebhookVerifier:
         secret: str,
         tolerance: int = TOLERANCE_SECONDS,
     ) -> WebhookEvent:
+        """Verify the signature and return a parsed event.
+
+        Args:
+            payload: Raw request body, exactly as received (do not
+                re-serialize the JSON).
+            header: Value of the ``Lyel-Signature`` request header.
+            secret: Webhook signing secret from the Lyel Pay dashboard.
+            tolerance: Maximum age of the timestamp in seconds, to guard
+                against replay. Defaults to 300 seconds.
+
+        Returns:
+            The parsed ``WebhookEvent``.
+
+        Raises:
+            ValueError: If the header is malformed, the timestamp is
+                older than ``tolerance``, or the signature does not match.
+
+        Example:
+            >>> verifier = WebhookVerifier()
+            >>> event = verifier.construct_event(
+            ...     payload=request.body,
+            ...     header=request.headers["Lyel-Signature"],
+            ...     secret="whsec_...",
+            ... )
+            >>> if event.type == "payment_intent.succeeded":
+            ...     mark_order_paid(event.data["id"])
+        """
         if isinstance(payload, bytes):
             payload = payload.decode()
 

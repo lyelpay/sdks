@@ -1,0 +1,48 @@
+<section style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 880px; margin: 0 auto; padding: 32px;">
+    <h1 style="font-size: 32px; margin-bottom: 8px;">Lyel Pay for Odoo</h1>
+    <p style="font-size: 18px; color: #555; margin-top: 0;">
+        Accept mobile money and card payments across Central and West Africa,
+        directly from your Odoo checkout.
+    </p>
+
+    <h2 style="margin-top: 40px;">Why Lyel Pay</h2>
+    <ul style="font-size: 16px; line-height: 1.6;">
+        <li><strong>Mobile money native.</strong> Airtel Money, Orange Money,
+            MTN Mobile Money — the payment methods your customers actually use.</li>
+        <li><strong>Multi-currency.</strong> XAF, XOF, CDF, EUR and USD out of the box.</li>
+        <li><strong>Embedded checkout.</strong> A hosted iframe keeps your customer
+            inside your store while staying PCI-compliant.</li>
+        <li><strong>Webhook-driven.</strong> Authoritative transaction updates,
+            so your orders are never out of sync with payment reality.</li>
+    </ul>
+
+    <h2 style="margin-top: 40px;">What this module does</h2>
+    <ul style="font-size: 16px; line-height: 1.6;">
+        <li>Adds Lyel Pay to your Payment Providers settings.</li>
+        <li>Enables Lyel Pay at the website checkout.</li>
+        <li>Adds a "Pay Now" link to invoices, payable via mobile money.</li>
+        <li>Listens for Lyel Pay webhooks and updates Odoo transactions
+            automatically.</li>
+    </ul>
+
+    <h2 style="margin-top: 40px;">Configuration</h2>
+    <ol style="font-size: 16px; line-height: 1.6;">
+        <li>Install the module.</li>
+        <li>Open <em>Settings → Payment Providers → Lyel Pay</em>.</li>
+        <li>Set state to <em>Test</em> or <em>Enabled</em>.</li>
+        <li>Paste your publishable key, secret key and webhook secret from the
+            <a href="https://lyelpay.com">Lyel Pay dashboard</a>.</li>
+        <li>Save. Configure the webhook URL on the dashboard:
+            <code>https://your-odoo-domain/payment/lyel_pay/webhook</code>.</li>
+    </ol>
+
+    <h2 style="margin-top: 40px;">Compatibility</h2>
+    <p style="font-size: 16px;">Odoo 17 &amp; Odoo 18. Community and Enterprise.</p>
+
+    <h2 style="margin-top: 40px;">Support</h2>
+    <p style="font-size: 16px;">
+        Documentation: <a href="https://lyelpay.com/docs">lyelpay.com/docs</a><br>
+        Issues &amp; source: <a href="https://github.com/lyelpay/lyel-pay-odoo">github.com/lyelpay/lyel-pay-odoo</a><br>
+        Contact: <a href="mailto:support@lyelpay.com">support@lyelpay.com</a>
+    </p>
+</section>

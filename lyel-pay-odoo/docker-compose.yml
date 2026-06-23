@@ -1,0 +1,75 @@
+# Local dev stack for the Lyel Pay Odoo module.
+#
+# Brings up Postgres + Odoo 17 + Odoo 18 with the module mounted as an
+# extra addon. Use this to validate the module on both supported versions
+# without polluting your machine.
+#
+# Quick start:
+#   docker compose up -d
+#   open http://localhost:8069   # Odoo 17
+#   open http://localhost:8070   # Odoo 18
+#
+# On first visit each Odoo asks you to create a database. Pick any name,
+# set master password "admin" (matches POSTGRES_PASSWORD below), load demo
+# data if you want, then install "Lyel Pay" from Apps.
+#
+# Reset everything:
+#   docker compose down -v
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  odoo17:
+    image: odoo:17
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    command: >
+      odoo
+      --dev=reload,qweb,xml
+      --addons-path=/mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+    volumes:
+      - odoo17-data:/var/lib/odoo
+      - ./payment_lyel_pay:/mnt/extra-addons/payment_lyel_pay:ro
+
+  odoo18:
+    image: odoo:18
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8070:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    command: >
+      odoo
+      --dev=reload,qweb,xml
+      --addons-path=/mnt/extra-addons,/usr/lib/python3/dist-packages/odoo/addons
+    volumes:
+      - odoo18-data:/var/lib/odoo
+      - ./payment_lyel_pay:/mnt/extra-addons/payment_lyel_pay:ro
+
+volumes:
+  db-data:
+  odoo17-data:
+  odoo18-data:

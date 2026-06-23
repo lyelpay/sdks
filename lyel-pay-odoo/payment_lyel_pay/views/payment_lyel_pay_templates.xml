@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Inline payment form. Odoo renders this template with the values
+        returned by `payment.transaction._get_specific_rendering_values()`.
+        The JS asset reads the data-* attributes and mounts the Lyel Pay
+        checkout iframe.
+    -->
+    <template id="payment_method_form" name="Lyel Pay Inline Form">
+        <div class="o_lyel_pay_checkout"
+             t-att-data-checkout-url="checkout_url"
+             t-att-data-publishable-key="publishable_key"
+             t-att-data-session-token="session_token"
+             t-att-data-amount="amount"
+             t-att-data-currency="currency"
+             t-att-data-origin="origin"
+             t-att-data-merchant-name="merchant_name"
+             t-att-data-reference="reference">
+            <div class="o_lyel_pay_iframe_container">
+                <!-- Iframe injected here by payment_form.js -->
+            </div>
+        </div>
+    </template>
+</odoo>

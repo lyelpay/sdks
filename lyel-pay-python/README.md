@@ -1,0 +1,120 @@
+# Lyel Pay Python SDK
+
+Official Python SDK for the [Lyel Pay](https://lyelpay.com) API.
+
+Accept mobile money payments (Airtel, Orange, MTN) and card payments in Central
+and West Africa with a single integration.
+
+## Install
+
+```bash
+pip install lyel-pay
+```
+
+Requires Python 3.9 or later.
+
+## Quickstart
+
+```python
+from lyel_pay import LyelPay
+
+# Reads the key from LYEL_PAY_SECRET_KEY env var by default.
+# Pass environment="sandbox" while developing.
+client = LyelPay(environment="sandbox")
+
+intent = client.payment_intents.create(
+    amount="1500.00",
+    currency="XAF",
+    description="Order #1234",
+    metadata={"order_id": "1234"},
+)
+
+# Hand the session_token to your frontend to mount the checkout widget.
+print(intent["session_token"])
+```
+
+## Configuration
+
+The client accepts the following arguments:
+
+| Argument      | Default                       | Notes                                                   |
+| ------------- | ----------------------------- | ------------------------------------------------------- |
+| `secret_key`  | `LYEL_PAY_SECRET_KEY` env var | Required (either argument or env var).                  |
+| `environment` | `"production"`                | `"sandbox"` or `"production"`.                          |
+| `base_url`    | resolved from `environment`   | Overrides `environment`. Use for self-hosted endpoints. |
+| `timeout`     | `30.0`                        | Per-request timeout in seconds.                         |
+
+## Payment intents
+
+### Create
+
+```python
+intent = client.payment_intents.create(
+    amount="1500.00",
+    currency="XAF",
+    description="Order #1234",
+    metadata={"order_id": "1234"},
+    idempotency_key="order-1234-attempt-1",  # optional
+)
+```
+
+If `idempotency_key` is omitted, the SDK generates a fresh UUID4 for each
+call. Pass an explicit key when you may retry the same logical operation,
+so the API can deduplicate.
+
+### Retrieve
+
+```python
+state = client.payment_intents.retrieve(session_token=intent["session_token"])
+print(state["status"])  # "pending" | "succeeded" | "failed" | "cancelled"
+```
+
+## Webhooks
+
+Lyel Pay signs every webhook with HMAC-SHA256. Verify and parse with
+`WebhookVerifier`:
+
+```python
+from lyel_pay import WebhookVerifier
+
+verifier = WebhookVerifier()
+
+# In your HTTP framework's request handler:
+event = verifier.construct_event(
+    payload=request.body,                       # raw bytes or str
+    header=request.headers["Lyel-Signature"],
+    secret="whsec_...",                         # from the Lyel Pay dashboard
+)
+
+if event.type == "payment_intent.succeeded":
+    mark_order_paid(event.data["id"])
+```
+
+`construct_event` raises `ValueError` if the signature is invalid or the
+timestamp is older than 5 minutes (replay protection).
+
+## Errors
+
+API errors raise `LyelPayError`:
+
+```python
+from lyel_pay import LyelPay, LyelPayError
+
+client = LyelPay(environment="sandbox")
+
+try:
+    intent = client.payment_intents.create(amount="1500.00", currency="XAF")
+except LyelPayError as e:
+    print(e.status_code, str(e))
+```
+
+The SDK retries automatically on `5xx` and network errors (3 attempts with
+exponential backoff). `4xx` errors are surfaced immediately without retry.
+
+## Supported currencies
+
+`XAF`, `XOF`, `CDF`, `EUR`, `USD`.
+
+## License
+
+MIT

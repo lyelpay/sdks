@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="payment_provider_form" model="ir.ui.view">
+        <field name="name">payment.provider.form.lyel_pay</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Lyel Pay" name="lyel_pay" invisible="code != 'lyel_pay'">
+                    <group>
+                        <field name="lyel_pay_publishable_key"
+                               required="code == 'lyel_pay' and state != 'disabled'"/>
+                        <field name="lyel_pay_secret_key"
+                               required="code == 'lyel_pay' and state != 'disabled'"
+                               password="True"/>
+                        <field name="lyel_pay_webhook_secret" password="True"/>
+                        <field name="lyel_pay_checkout_url"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        Configure the webhook URL on your Lyel Pay dashboard:
+                        <code>&lt;your-odoo-domain&gt;/payment/lyel_pay/webhook</code>
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
