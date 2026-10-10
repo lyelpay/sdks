@@ -1,48 +1,31 @@
-import { LyelPayConfig, PaymentIntent, CreatePaymentIntentParams } from './types';
+import { isCreatedPaymentIntent, isPaymentIntent } from './guards';
+import { HttpClient } from './http-client';
+import { CreatedPaymentIntent, CreatePaymentIntentParams, PaymentIntent } from './types';
 
+const BASE_PATH = '/gateway/v1/payment-intents';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Server-side payment intent calls. Every method uses the secret key: never call them from a browser. */
 export class PaymentIntents {
-  private readonly config: LyelPayConfig;
-  private readonly baseUrl: string;
+  constructor(private readonly http: HttpClient) {}
 
-  constructor(config: LyelPayConfig) {
-    this.config = config;
-    this.baseUrl = config.baseUrl ?? 'https://api.lyelpay.com';
+  async create(params: CreatePaymentIntentParams): Promise<CreatedPaymentIntent> {
+    return this.http.request('POST', BASE_PATH, isCreatedPaymentIntent, params);
   }
 
-  async create(params: CreatePaymentIntentParams): Promise<PaymentIntent> {
-    return this.request<PaymentIntent>('POST', '/gateway/v1/payment-intents', params);
+  /** With the webhook, the only proof that a payment happened: trust `status === 'COMPLETED'` from here. */
+  async retrieve(id: string): Promise<PaymentIntent> {
+    return this.http.request('GET', intentPath(id), isPaymentIntent);
   }
 
-  async retrieve(sessionToken: string): Promise<PaymentIntent> {
-    return this.request<PaymentIntent>('GET', '/gateway/v1/payment-intents/status', undefined, sessionToken);
+  /** Cancels a pending intent. Replaying it on a CANCELED intent answers the same intent. */
+  async cancel(id: string): Promise<PaymentIntent> {
+    return this.http.request('POST', `${intentPath(id)}/cancel`, isPaymentIntent);
   }
+}
 
-  private async request<T>(
-    method: string,
-    path: string,
-    body?: unknown,
-    sessionToken?: string,
-  ): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.config.secretKey}`,
-    };
-
-    if (sessionToken) headers['x-session-token'] = sessionToken;
-
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
-      const error = new Error((err as { message?: string }).message ?? `HTTP ${res.status}`) as Error & { statusCode: number };
-      error.statusCode = res.status;
-      throw error;
-    }
-
-    return res.json() as Promise<T>;
-  }
+/** The API only takes UUIDs; checking here stops ids like `..` from rewriting the path the secret key is sent to. */
+function intentPath(id: string): string {
+  if (!UUID.test(id)) throw new TypeError('A payment intent id must be a UUID');
+  return `${BASE_PATH}/${id}`;
 }
