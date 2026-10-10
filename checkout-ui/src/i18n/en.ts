@@ -27,6 +27,7 @@ export const en: Dictionary = {
   resend: 'Resend code',
   codeResent: 'New code sent.',
   maxSendsReached: 'You have reached the maximum number of codes.',
+  channelUnavailable: 'The code can’t be sent right now. Try again in a few minutes.',
   changeNumber: 'Change number',
   wrongCode: 'Incorrect code.',
   attemptsLeft: (count) => (count === 1 ? '1 attempt left.' : `${count} attempts left.`),

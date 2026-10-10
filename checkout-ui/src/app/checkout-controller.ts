@@ -1,15 +1,16 @@
 import { CheckoutRequestError, type CheckoutApi } from '../api/checkout-api';
-import { isEmbeddingAllowed } from '../domain/embedding';
+import { isEmbeddingAllowed, isParentOriginConfirmed } from '../domain/embedding';
 import { normalizePhoneNumber } from '../domain/phone';
 import type { CheckoutSession, Surface } from '../domain/session';
 import { outcomeMessageFor, type WidgetMessage } from '../messaging/contract';
 import type { CheckoutHost } from './checkout-host';
-import { initialState, reduce, type CheckoutEvent, type CheckoutState, type Effect } from './checkout-machine';
+import { initialState, reduce, retryPlan, type CheckoutEvent, type CheckoutState, type Effect } from './checkout-machine';
 
 export const AUTO_LEAVE_DELAY_MS = 3000;
-const NOTICE_DURATION_MS = 3000;
 const POLL_DELAY_MS = 1500;
 const MAX_POLLS = 10;
+
+type ReadEvent = 'sessionRead' | 'wrongCodeRead' | 'inProgressRead';
 
 export interface ControllerSnapshot {
   state: CheckoutState;
@@ -22,8 +23,10 @@ export interface ControllerOptions {
   api: CheckoutApi;
   host: CheckoutHost;
   surface: Surface;
-  /** Modes A and B: the embedding page, checked against the allowed domains before anything is shown (S2). */
+  /** Modes A and B: the origin the link announces, checked against the allowed domains (S2). */
   parentOrigin: string | null;
+  /** Modes A and B: the parent origin the browser reports (ancestorOrigins, else Referer); null if unknown. */
+  observedParentOrigin: string | null;
   /** Hosted page: the id in the address must be the intent of the token. */
   expectedIntentId: string | null;
   onChange: (snapshot: ControllerSnapshot) => void;
@@ -37,10 +40,11 @@ export class CheckoutController {
   private phoneDraft = '';
   private lastPhoneNumber: string | null = null;
   private redirecting = false;
-  /** Nothing is posted to the parent before its origin passed the allowed-domains check. */
+  /** Nothing is posted to the parent before a session passed acceptSession. */
   private verified = false;
   private polls = 0;
   private expiryChecked = false;
+  /** Timers of the current step: cleared on every step change and on dispose. */
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly now: () => Date;
 
@@ -53,17 +57,7 @@ export class CheckoutController {
   }
 
   async start(): Promise<void> {
-    const session = await this.read();
-    if (!session) return;
-    if (!this.isAllowedHere(session)) {
-      this.dispatch({ type: 'embeddingRefused' });
-      return;
-    }
-    this.verified = true;
-    this.session = session;
-    this.phoneDraft = session.customerPhoneNumber ?? '';
-    this.dispatch({ type: 'sessionRead', session, now: this.now() });
-    this.notify({ type: 'ready' });
+    await this.refresh();
   }
 
   /** Modal close button, "Close" and Escape; locked while the payment is in progress (state 7). */
@@ -104,13 +98,19 @@ export class CheckoutController {
     this.dispatch({ type: 'changeNumber' });
   }
 
-  /** State 8 sends a new code (the API keeps no "validated" mark); state 14 re-reads the status first. */
+  /** State 14 re-reads the status first; state 8 follows retryPlan. */
   retry(): void {
     if (this.state.step === 'networkError') {
       this.dispatch({ type: 'retryAfterNetworkError' });
       return;
     }
     if (this.state.step !== 'insufficientFunds') return;
+    const plan = retryPlan(this.state.otp, this.now());
+    if (plan === 'reenterCode') {
+      this.dispatch({ type: 'reenterCode' });
+      return;
+    }
+    if (plan === 'none') return;
     if (!this.lastPhoneNumber) {
       this.changeNumber();
       return;
@@ -139,26 +139,36 @@ export class CheckoutController {
   }
 
   dispose(): void {
-    this.timers.forEach(clearTimeout);
-    this.timers.clear();
+    this.clearTimers();
+  }
+
+  /** The single gate every status read goes through: S2 for modes A and B, the path id for mode C. */
+  private acceptSession(session: CheckoutSession): boolean {
+    if (!this.isAllowedHere(session)) {
+      this.verified = false;
+      this.dispatch({ type: 'embeddingRefused' });
+      return false;
+    }
+    this.verified = true;
+    this.session = session;
+    return true;
   }
 
   private isAllowedHere(session: CheckoutSession): boolean {
     if (this.options.surface === 'hosted') return session.id === this.options.expectedIntentId;
-    const origin = this.options.parentOrigin;
-    return origin !== null && isEmbeddingAllowed(origin, session.embedding);
+    const { parentOrigin, observedParentOrigin } = this.options;
+    return (
+      parentOrigin !== null &&
+      isEmbeddingAllowed(parentOrigin, session.embedding) &&
+      isParentOriginConfirmed(parentOrigin, observedParentOrigin, session.mode)
+    );
   }
 
   private async sendCode(phoneNumber: string): Promise<void> {
     this.lastPhoneNumber = phoneNumber;
     try {
       const otp = await this.options.api.requestCode(phoneNumber);
-      this.dispatch({ type: 'codeSent', otp });
-      if (this.state.step === 'code' && this.state.notice === 'resent') {
-        this.later(NOTICE_DURATION_MS, () => {
-          this.dispatch({ type: 'noticeTimedOut' });
-        });
-      }
+      this.dispatch({ type: 'codeSent', otp, now: this.now() });
     } catch (error) {
       this.fail(error);
     }
@@ -173,11 +183,14 @@ export class CheckoutController {
     }
   }
 
-  private async refresh(eventType: 'sessionRead' | 'wrongCodeRead' | 'inProgressRead' = 'sessionRead'): Promise<void> {
+  private async refresh(eventType: ReadEvent = 'sessionRead'): Promise<void> {
     const session = await this.read();
     if (!session) return;
-    this.session = session;
+    const firstAcceptance = !this.verified;
+    if (!this.acceptSession(session)) return;
+    if (firstAcceptance) this.phoneDraft = session.customerPhoneNumber ?? '';
     this.dispatch({ type: eventType, session, now: this.now() });
+    if (firstAcceptance) this.notify({ type: 'ready' });
   }
 
   private fail(error: unknown): void {
@@ -189,6 +202,7 @@ export class CheckoutController {
     const previous = this.state;
     const { state, effect } = reduce(previous, event);
     this.state = state;
+    if (previous.step !== state.step) this.clearTimers();
     this.announce(previous);
     this.options.onChange(this.snapshot);
     this.run(effect);
@@ -253,5 +267,10 @@ export class CheckoutController {
       task();
     }, delay);
     this.timers.add(timer);
+  }
+
+  private clearTimers(): void {
+    this.timers.forEach(clearTimeout);
+    this.timers.clear();
   }
 }

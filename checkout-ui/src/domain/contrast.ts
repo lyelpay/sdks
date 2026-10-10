@@ -9,9 +9,9 @@ export interface Theme {
   accent: string;
   /** Text on the accent. */
   onAccent: string;
-  /** Links and text buttons: at least 4.5:1 on white. */
+  /** Links and text buttons: the merchant colour at 4.5:1 on white, else the Lyel Pay dark. */
   link: string;
-  /** Border of the active field: at least 3:1 on white. */
+  /** Border of the active field: the merchant colour at 3:1 on white, else the Lyel Pay dark. */
   focus: string;
   /** Soft ring around the active field. */
   halo: string;
@@ -22,12 +22,10 @@ export const LYEL_PETROL = '#08313A';
 
 const WHITE: Rgb = { r: 255, g: 255, b: 255 };
 const PETROL: Rgb = { r: 8, g: 49, b: 58 };
-/** The button text is 17px bold: the brief settles on the large-text threshold (decision Adam, 2026-10-06). */
+/** The button text is 19px bold, large text in WCAG terms, so 3:1 applies (decision Adam, 2026-10-06). */
 const BUTTON_TEXT_RATIO = 3;
 const LINK_RATIO = 4.5;
 const FIELD_BORDER_RATIO = 3;
-const DARKEN_STEP = 0.92;
-const MAX_DARKEN_STEPS = 60;
 const HALO_ALPHA = 0.28;
 
 export function parseHexColor(input: string): Rgb | null {
@@ -56,16 +54,8 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-function darkenUntil(color: Rgb, ratio: number): Rgb {
-  let current = color;
-  for (let i = 0; i < MAX_DARKEN_STEPS && contrastRatio(current, WHITE) < ratio; i++) {
-    current = {
-      r: Math.round(current.r * DARKEN_STEP),
-      g: Math.round(current.g * DARKEN_STEP),
-      b: Math.round(current.b * DARKEN_STEP),
-    };
-  }
-  return current;
+function readableOnWhite(color: Rgb, ratio: number): Rgb {
+  return contrastRatio(color, WHITE) >= ratio ? color : PETROL;
 }
 
 /** Derives every coloured token from the merchant colour, keeping each one readable. */
@@ -74,8 +64,8 @@ export function buildTheme(primaryColor: string | null): Theme {
   return {
     accent: toHex(accent),
     onAccent: contrastRatio(accent, WHITE) >= BUTTON_TEXT_RATIO ? toHex(WHITE) : toHex(PETROL),
-    link: toHex(darkenUntil(accent, LINK_RATIO)),
-    focus: toHex(darkenUntil(accent, FIELD_BORDER_RATIO)),
+    link: toHex(readableOnWhite(accent, LINK_RATIO)),
+    focus: toHex(readableOnWhite(accent, FIELD_BORDER_RATIO)),
     halo: `rgba(${accent.r}, ${accent.g}, ${accent.b}, ${HALO_ALPHA})`,
   };
 }

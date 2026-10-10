@@ -7,7 +7,7 @@ import { buildTheme } from './domain/contrast';
 import { parseLaunchParams, type LaunchParams } from './launch/launch-params';
 import { createParentChannel } from './messaging/contract';
 import { buildRenderContext } from './ui/build-context';
-import { bindInteractions, focusStep } from './ui/dom-binding';
+import { bindInteractions, captureTyping, focusStep, restoreTyping } from './ui/dom-binding';
 import { applyLiveUpdates } from './ui/live-updates';
 import { renderShell } from './ui/shells';
 import { applyTheme } from './ui/theme';
@@ -17,6 +17,18 @@ const TICK_MS = 1000;
 
 function isFramed(): boolean {
   return window.self !== window.top;
+}
+
+/** S2: the parent origin as the browser reports it; null when it cannot be known. */
+function observedParentOrigin(): string | null {
+  const ancestors = 'ancestorOrigins' in window.location ? window.location.ancestorOrigins : null;
+  const ancestor = ancestors && ancestors.length > 0 ? ancestors.item(0) : null;
+  if (ancestor) return ancestor;
+  try {
+    return document.referrer ? new URL(document.referrer).origin : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Modes A and B live in the SDK iframe; the hosted page must never be framed (anti-clickjacking). */
@@ -38,7 +50,7 @@ function renderUnavailable(root: HTMLElement, launch: LaunchParams | null, confi
     buttonLabel: null,
   };
   const snapshot: ControllerSnapshot = { state: { step: 'unavailable' }, session: null, phoneDraft: '', redirecting: false };
-  root.innerHTML = renderShell(buildRenderContext(snapshot, fallback, config));
+  root.innerHTML = renderShell(buildRenderContext(snapshot, fallback, config, new Date()));
 }
 
 function start(root: HTMLElement): void {
@@ -53,13 +65,17 @@ function start(root: HTMLElement): void {
 
   let previousStep = initialState().step;
   const render = (snapshot: ControllerSnapshot): void => {
-    const ctx = buildRenderContext(snapshot, launch, config);
+    const now = new Date();
+    const ctx = buildRenderContext(snapshot, launch, config, now);
     applyTheme(document.documentElement, buildTheme(snapshot.session?.merchant.primaryColor ?? null));
     document.documentElement.lang = ctx.locale;
+    const sameStep = snapshot.state.step === previousStep;
+    const typing = sameStep ? captureTyping(root) : null;
     root.innerHTML = renderShell(ctx);
-    applyLiveUpdates(root, snapshot, ctx.t, new Date());
+    if (typing) restoreTyping(root, typing);
+    applyLiveUpdates(root, snapshot, ctx.t, now);
     const firstScreen = previousStep === 'loading';
-    if (snapshot.state.step !== previousStep && !(firstScreen && launch.surface === 'embedded')) focusStep(root);
+    if (!sameStep && !(firstScreen && launch.surface === 'embedded')) focusStep(root);
     previousStep = snapshot.state.step;
   };
 
@@ -68,6 +84,7 @@ function start(root: HTMLElement): void {
     host,
     surface: launch.surface,
     parentOrigin: launch.parentOrigin,
+    observedParentOrigin: launch.surface === 'hosted' ? null : observedParentOrigin(),
     expectedIntentId: launch.intentId,
     onChange: render,
   });
@@ -76,18 +93,26 @@ function start(root: HTMLElement): void {
     window.location.assign(url);
   });
 
-  window.setInterval(() => {
+  const ticker = window.setInterval(() => {
     const snapshot = controller.snapshot;
     const now = new Date();
-    applyLiveUpdates(root, snapshot, buildRenderContext(snapshot, launch, config).t, now);
+    applyLiveUpdates(root, snapshot, buildRenderContext(snapshot, launch, config, now).t, now);
     if (snapshot.session && snapshot.session.expiresAt <= now) controller.expiryReached();
   }, TICK_MS);
 
-  if (launch.surface === 'embedded') {
-    new ResizeObserver(() => {
-      controller.notify({ type: 'resize', height: Math.ceil(document.documentElement.scrollHeight) });
-    }).observe(document.body);
-  }
+  const resizeObserver =
+    launch.surface === 'embedded'
+      ? new ResizeObserver(() => {
+          controller.notify({ type: 'resize', height: Math.ceil(document.documentElement.scrollHeight) });
+        })
+      : null;
+  resizeObserver?.observe(document.body);
+
+  window.addEventListener('pagehide', () => {
+    window.clearInterval(ticker);
+    resizeObserver?.disconnect();
+    controller.dispose();
+  });
 
   render(controller.snapshot);
   void controller.start();

@@ -2,6 +2,8 @@ import type { RenderContext } from '../render-context';
 import { escapeHtml, when } from '../html';
 import { icons } from '../icons';
 import { spinner } from './chrome';
+import { retryPlan } from '../../app/checkout-machine';
+import type { OtpProgress } from '../../domain/session';
 
 type Tone = 'error' | 'warning' | 'muted';
 type Exit = 'cancelUrl' | 'none';
@@ -53,9 +55,12 @@ function outcomeBlock(ctx: RenderContext, outcome: Outcome): string {
 
 const base = { retry: false, changeNumber: false, exit: 'cancelUrl' } as const;
 
-export function insufficientFunds(ctx: RenderContext): string {
+/** State 8: "Try again" disappears once neither the current code nor a new one can be used. */
+export function insufficientFunds(ctx: RenderContext, otp: OtpProgress | null): string {
   const { t } = ctx;
-  return outcomeBlock(ctx, { ...base, tone: 'warning', icon: icons.wallet, title: t.insufficientTitle, body: t.insufficientBody, role: 'alert', retry: true, changeNumber: true, exit: 'none' });
+  const canRetry = retryPlan(otp, ctx.now) !== 'none';
+  const block = outcomeBlock(ctx, { ...base, tone: 'warning', icon: icons.wallet, title: t.insufficientTitle, body: t.insufficientBody, role: 'alert', retry: canRetry, changeNumber: true, exit: 'none' });
+  return canRetry ? block : `${block}<p class="lp-muted-sm" role="status">${escapeHtml(t.maxSendsReached)}</p>`;
 }
 
 export function failed(ctx: RenderContext): string {

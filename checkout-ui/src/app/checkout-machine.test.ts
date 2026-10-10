@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CheckoutSession, OtpProgress } from '../domain/session';
-import { canCancel, initialState, reduce, type CheckoutState } from './checkout-machine';
+import { canCancel, initialState, reduce, retryPlan, type CheckoutState } from './checkout-machine';
 
 const NOW = new Date('2026-10-10T10:00:00Z');
 const LATER = new Date('2026-10-10T10:05:00Z');
@@ -36,7 +36,7 @@ function session(overrides: Partial<CheckoutSession> = {}): CheckoutSession {
 
 const phone: CheckoutState = { step: 'phone', error: null };
 const sending: CheckoutState = { step: 'sendingCode' };
-const code: CheckoutState = { step: 'code', otp, error: null, notice: null, resending: false };
+const code: CheckoutState = { step: 'code', otp, error: null, noticeUntil: null, resending: false };
 const processing: CheckoutState = { step: 'processing', otp };
 
 describe('reading the status', () => {
@@ -85,7 +85,7 @@ describe('network problem (state 14)', () => {
 
   it('is reached when a call cannot get through', () => {
     expect(reduce(processing, { type: 'requestFailed', failure: { kind: 'network' } }).state).toEqual({ step: 'networkError' });
-    expect(reduce(sending, { type: 'requestFailed', failure: { kind: 'api', status: 503, code: 'E_GATEWAY_OTP_CHANNEL_UNAVAILABLE' } }).state).toEqual({ step: 'networkError' });
+    expect(reduce(sending, { type: 'requestFailed', failure: { kind: 'api', status: 503, code: null } }).state).toEqual({ step: 'networkError' });
   });
 });
 
@@ -115,17 +115,30 @@ describe('the number step', () => {
   });
 
   it('goes to the code step once sent', () => {
-    expect(reduce(sending, { type: 'codeSent', otp }).state).toEqual(code);
+    expect(reduce(sending, { type: 'codeSent', otp, now: NOW }).state).toEqual(code);
+  });
+
+  it('says when no code can be sent any more (send limit on state 2)', () => {
+    const next = reduce(sending, { type: 'requestFailed', failure: { kind: 'api', status: 429, code: 'E_GATEWAY_OTP_SEND_LIMIT' } });
+    expect(next).toEqual({ state: { step: 'phone', error: 'sendLimit' }, effect: 'none' });
+  });
+
+  it('has a dedicated message when WhatsApp is unavailable, not the network one', () => {
+    const failure = { kind: 'api', status: 503, code: 'E_GATEWAY_OTP_CHANNEL_UNAVAILABLE' } as const;
+    expect(reduce(sending, { type: 'requestFailed', failure }).state).toEqual({ step: 'phone', error: 'channelUnavailable' });
+    expect(reduce({ ...code, resending: true }, { type: 'requestFailed', failure }).state).toEqual({
+      ...code,
+      error: { kind: 'channelUnavailable' },
+    });
   });
 });
 
 describe('the code step', () => {
-  it('announces a new code after a resend, then hides the notice', () => {
+  it('announces a new code for 3 s after a resend, without a later transition', () => {
     const resending = reduce(code, { type: 'resendStarted' }).state;
     expect(resending).toEqual({ ...code, resending: true });
-    const resent = reduce(resending, { type: 'codeSent', otp: { ...otp, remainingSends: 1 } }).state;
-    expect(resent).toEqual({ ...code, otp: { ...otp, remainingSends: 1 }, notice: 'resent' });
-    expect(reduce(resent, { type: 'noticeTimedOut' }).state).toEqual({ ...code, otp: { ...otp, remainingSends: 1 } });
+    const resent = reduce(resending, { type: 'codeSent', otp: { ...otp, remainingSends: 1 }, now: NOW }).state;
+    expect(resent).toEqual({ ...code, otp: { ...otp, remainingSends: 1 }, noticeUntil: new Date(NOW.getTime() + 3000) });
   });
 
   it('re-reads the status when a resend is refused for timing or limit', () => {
@@ -162,7 +175,7 @@ describe('the code step', () => {
 
   it('shows insufficient funds (8) without ending the payment', () => {
     const next = reduce(processing, { type: 'requestFailed', failure: { kind: 'api', status: 422, code: 'E_GATEWAY_INSUFFICIENT_FUNDS' } });
-    expect(next).toEqual({ state: { step: 'insufficientFunds' }, effect: 'none' });
+    expect(next).toEqual({ state: { step: 'insufficientFunds', otp: { ...otp, remainingAttempts: 4 } }, effect: 'none' });
   });
 
   it('never shows an error on a concurrent confirm (409): it keeps waiting and reads the status', () => {
@@ -180,7 +193,30 @@ describe('the code step', () => {
 
   it('goes back to the number on "change number"', () => {
     expect(reduce(code, { type: 'changeNumber' }).state).toEqual(phone);
-    expect(reduce({ step: 'insufficientFunds' }, { type: 'changeNumber' }).state).toEqual(phone);
+    expect(reduce({ step: 'insufficientFunds', otp }, { type: 'changeNumber' }).state).toEqual(phone);
+  });
+
+  it('goes back to the code entry from state 8 without a new send', () => {
+    expect(reduce({ step: 'insufficientFunds', otp }, { type: 'reenterCode' }).state).toEqual(code);
+  });
+});
+
+describe('retryPlan (state 8)', () => {
+  it('re-enters the same code while it is valid and has attempts', () => {
+    expect(retryPlan(otp, NOW)).toBe('reenterCode');
+  });
+
+  it('sends a new code when the code expired or has no attempt left', () => {
+    expect(retryPlan(otp, LATER)).toBe('sendNewCode');
+    expect(retryPlan({ ...otp, remainingAttempts: 0 }, NOW)).toBe('sendNewCode');
+  });
+
+  it('offers nothing once no code can be sent', () => {
+    expect(retryPlan({ ...otp, remainingAttempts: 0, remainingSends: 0 }, NOW)).toBe('none');
+  });
+
+  it('sends a code when none is known', () => {
+    expect(retryPlan(null, NOW)).toBe('sendNewCode');
   });
 });
 
@@ -209,7 +245,7 @@ describe('canCancel (hosted page link)', () => {
     [{ step: 'phone', error: 'notFound' }, true],
     [code, true],
     [{ ...code, error: { kind: 'wrong', remainingAttempts: 2 } }, true],
-    [{ step: 'insufficientFunds' }, true],
+    [{ step: 'insufficientFunds', otp: null }, true],
     [sending, false],
     [{ ...code, resending: true }, false],
     [processing, false],

@@ -22,4 +22,6 @@ export interface RenderContext {
   phoneDraft: string;
   /** Hosted page only: a live outcome redirects after 3 s; a reload does not. */
   redirecting: boolean;
+  /** Render time, for the decisions that depend on the clock (state 8 retry). */
+  now: Date;
 }

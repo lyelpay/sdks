@@ -4,10 +4,24 @@ import { icons } from '../icons';
 import { spinner, testData } from './chrome';
 import type { PhoneError } from '../../app/checkout-machine';
 
+function simpleError(text: string): string {
+  return `<div class="lp-error" role="alert">${icons.alert}<span>${escapeHtml(text)}</span></div>`;
+}
+
 function errorMessage(ctx: RenderContext, error: PhoneError): string {
-  if (error === 'invalid') {
-    return `<div class="lp-error" role="alert">${icons.alert}<span>${escapeHtml(ctx.t.invalidNumber)}</span></div>`;
+  switch (error) {
+    case 'invalid':
+      return simpleError(ctx.t.invalidNumber);
+    case 'sendLimit':
+      return simpleError(ctx.t.maxSendsReached);
+    case 'channelUnavailable':
+      return simpleError(ctx.t.channelUnavailable);
+    case 'notFound':
+      return notFoundMessage(ctx);
   }
+}
+
+function notFoundMessage(ctx: RenderContext): string {
   const fix = ctx.signupUrl
     ? `${escapeHtml(ctx.t.notFoundFix)} <a class="lp-link" href="${escapeHtml(ctx.signupUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(ctx.t.createAccount)}</a>`
     : escapeHtml(ctx.t.notFoundFixNoLink);

@@ -33,11 +33,13 @@ function asEmbedSurface(value: string | null): Surface | null {
 
 /**
  * The token rides in the fragment, which browsers send neither to the server nor in a Referer (S11).
- * The legacy query string of the v0 SDK is still read; its amount and merchant name are ignored (S9).
+ * The legacy query string of the v0 SDK is still read for modes A and B only; its amount and merchant name
+ * are ignored (S9). The hosted page reads the fragment only.
  */
 export function parseLaunchParams(location: LaunchLocation): LaunchParams | null {
+  const hosted = HOSTED_PATH.exec(location.pathname);
   const fromHash = new URLSearchParams(location.hash.replace(/^#/, ''));
-  const params = fromHash.has('st') ? fromHash : new URLSearchParams(location.search);
+  const params = hosted || fromHash.has('st') ? fromHash : new URLSearchParams(location.search);
   const publishableKey = params.get('pk');
   const sessionToken = params.get('st');
   if (!publishableKey || !sessionToken) return null;
@@ -49,7 +51,6 @@ export function parseLaunchParams(location: LaunchLocation): LaunchParams | null
     buttonLabel: asButtonLabel(params.get('button')),
   };
 
-  const hosted = HOSTED_PATH.exec(location.pathname);
   if (hosted?.[1]) {
     return { ...common, surface: 'hosted', intentId: decodeURIComponent(hosted[1]), parentOrigin: null, framed: true };
   }

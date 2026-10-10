@@ -2,6 +2,7 @@ import {
   BUTTON_LABELS,
   INTENT_STATUSES,
   type CheckoutSession,
+  type IntentMode,
   type OtpProgress,
 } from '../domain/session';
 import { bool, date, isRecord, nullableDate, nullableStr, num, oneOf, rec, str, InvalidResponseError, type JsonRecord } from './json';
@@ -18,9 +19,24 @@ export function toOtpProgress(raw: unknown): OtpProgress {
   };
 }
 
-function toReturnUrls(raw: unknown): CheckoutSession['returnUrls'] {
+const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+
+/** Only https, or http on localhost in TEST: anything else (javascript:, data:, plain http) is dropped. */
+function isSafeReturnUrl(value: string, mode: IntentMode): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return true;
+  return mode === 'TEST' && url.protocol === 'http:' && LOCAL_HOSTS.includes(url.hostname);
+}
+
+function toReturnUrls(raw: unknown, mode: IntentMode): CheckoutSession['returnUrls'] {
   if (!isRecord(raw)) return null;
-  return { success: str(raw, 'success'), cancel: str(raw, 'cancel') };
+  const urls = { success: str(raw, 'success'), cancel: str(raw, 'cancel') };
+  return isSafeReturnUrl(urls.success, mode) && isSafeReturnUrl(urls.cancel, mode) ? urls : null;
 }
 
 function toAllowedDomains(raw: JsonRecord): string[] {
@@ -38,6 +54,7 @@ export function toCheckoutSession(raw: unknown): CheckoutSession {
   const merchant = rec(raw, 'merchant');
   const embedding = rec(raw, 'embedding');
   const otp = raw['otp'];
+  const mode = oneOf(raw, 'mode', ['TEST', 'LIVE']);
   return {
     id: str(raw, 'id'),
     status: oneOf(raw, 'status', INTENT_STATUSES),
@@ -45,7 +62,7 @@ export function toCheckoutSession(raw: unknown): CheckoutSession {
     amount: str(raw, 'amount'),
     currency: str(raw, 'currency'),
     description: nullableStr(raw, 'description'),
-    mode: oneOf(raw, 'mode', ['TEST', 'LIVE']),
+    mode,
     locale: str(raw, 'locale'),
     expiresAt: date(raw, 'expiresAt'),
     merchant: {
@@ -55,7 +72,7 @@ export function toCheckoutSession(raw: unknown): CheckoutSession {
       buttonLabel: oneOf(merchant, 'buttonLabel', BUTTON_LABELS),
       showSecuredBadge: securedBadgeSetting(raw, merchant),
     },
-    returnUrls: toReturnUrls(raw['returnUrls']),
+    returnUrls: toReturnUrls(raw['returnUrls'], mode),
     customerPhoneNumber: nullableStr(raw, 'customerPhoneNumber'),
     otp: otp === null || otp === undefined ? null : toOtpProgress(otp),
     embedding: {

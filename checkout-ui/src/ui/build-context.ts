@@ -6,7 +6,12 @@ import { formatAmount, shouldShowSecuredBadge } from '../domain/display';
 import { resolveLocale } from '../domain/locale';
 import type { RenderContext } from './render-context';
 
-export function buildRenderContext(snapshot: ControllerSnapshot, launch: LaunchParams, config: CheckoutConfig): RenderContext {
+export function buildRenderContext(
+  snapshot: ControllerSnapshot,
+  launch: LaunchParams,
+  config: CheckoutConfig,
+  now: Date,
+): RenderContext {
   const { session } = snapshot;
   const locale = resolveLocale(launch.locale, session?.locale ?? null);
   const merchant = session?.merchant;
@@ -25,5 +30,6 @@ export function buildRenderContext(snapshot: ControllerSnapshot, launch: LaunchP
     showSecuredBadge: shouldShowSecuredBadge(launch.surface, merchant?.showSecuredBadge),
     phoneDraft: snapshot.phoneDraft,
     redirecting: snapshot.redirecting,
+    now,
   };
 }

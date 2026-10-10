@@ -21,11 +21,11 @@ function body(ctx: RenderContext): string {
     case 'sendingCode':
       return withSummary(ctx, phoneStep(ctx, null, true));
     case 'code':
-      return withSummary(ctx, codeStep(ctx, state.otp, state.error, state.notice, state.resending));
+      return withSummary(ctx, codeStep(ctx, state.otp, state.error, state.noticeUntil, state.resending));
     case 'processing':
       return withSummary(ctx, processing(ctx));
     case 'insufficientFunds':
-      return withSummary(ctx, insufficientFunds(ctx));
+      return withSummary(ctx, insufficientFunds(ctx, state.otp));
     case 'success':
       return success(ctx, state.alreadyPaid);
     case 'failed':

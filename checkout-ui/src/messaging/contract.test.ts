@@ -32,6 +32,6 @@ describe('outcomeMessageFor', () => {
     const session = { id: 'pi_1', reference: 'GWP-1' };
     expect(outcomeMessageFor({ step: 'failed' }, { step: 'failed' }, session)).toBeNull();
     expect(outcomeMessageFor({ step: 'phone', error: null }, { step: 'sendingCode' }, session)).toBeNull();
-    expect(outcomeMessageFor({ step: 'processing', otp: null }, { step: 'insufficientFunds' }, session)).toBeNull();
+    expect(outcomeMessageFor({ step: 'processing', otp: null }, { step: 'insufficientFunds', otp: null }, session)).toBeNull();
   });
 });

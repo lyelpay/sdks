@@ -49,6 +49,10 @@ describe('parseLaunchParams', () => {
     expect(params?.buttonLabel).toBeNull();
   });
 
+  it('never reads the hosted page from the query string', () => {
+    expect(parseLaunchParams({ pathname: '/pay/pi_1', hash: '', search: '?pk=pk_test_a&st=tok' })).toBeNull();
+  });
+
   it.each([
     { pathname: '/', hash: '', search: '' },
     { pathname: '/', hash: '#pk=pk_test_a&st=tok', search: '' },

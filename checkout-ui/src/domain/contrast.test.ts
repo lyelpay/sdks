@@ -44,24 +44,18 @@ describe('buildTheme', () => {
     expect(buildTheme('#F5C518').onAccent).toBe('#08313A');
   });
 
-  it('darkens links until they reach 4.5:1 on white', () => {
-    const theme = buildTheme('#FE6A49');
-    expect(contrastRatio(parseHexColor(theme.link) ?? WHITE, WHITE)).toBeGreaterThanOrEqual(4.5);
+  it('falls back to the Lyel Pay dark for links below 4.5:1, never a darkened merchant colour', () => {
+    expect(buildTheme('#FE6A49').link).toBe('#08313A');
+    expect(buildTheme('#1E8E3E').link).toBe('#08313A');
   });
 
-  it('darkens the active field border until it reaches 3:1 on white', () => {
-    const theme = buildTheme('#F5C518');
-    expect(contrastRatio(parseHexColor(theme.focus) ?? WHITE, WHITE)).toBeGreaterThanOrEqual(3);
+  it('keeps the merchant colour for links at 4.5:1 or more', () => {
+    expect(buildTheme('#1F5FAF').link).toBe('#1F5FAF');
   });
 
-  it('keeps a colour that is already dark enough', () => {
-    const theme = buildTheme('#08313A');
-    expect(theme.link).toBe('#08313A');
-    expect(theme.focus).toBe('#08313A');
-  });
-
-  it('turns pure white into a readable ink', () => {
-    const theme = buildTheme('#FFFFFF');
-    expect(contrastRatio(parseHexColor(theme.link) ?? WHITE, WHITE)).toBeGreaterThanOrEqual(4.5);
+  it('keeps the merchant colour for the active field border at 3:1 or more, else the Lyel Pay dark', () => {
+    expect(buildTheme('#1E8E3E').focus).toBe('#1E8E3E');
+    expect(buildTheme('#FE6A49').focus).toBe('#08313A');
+    expect(buildTheme('#F5C518').focus).toBe('#08313A');
   });
 });

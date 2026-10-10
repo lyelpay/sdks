@@ -1,4 +1,4 @@
-import type { Embedding } from './session';
+import type { Embedding, IntentMode } from './session';
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
@@ -18,6 +18,18 @@ function matchesDomain(host: string, pattern: string): boolean {
     return host.endsWith(`.${parent}`);
   }
   return host === domain;
+}
+
+/**
+ * S2: the `origin` announced in the link can be forged; it must be the origin the browser reports for the
+ * parent. In LIVE an unknown parent is refused; TEST tolerates it (browsers without ancestorOrigins nor Referer).
+ */
+export function isParentOriginConfirmed(announced: string, observed: string | null, mode: IntentMode): boolean {
+  const announcedUrl = parseOrigin(announced);
+  if (!announcedUrl) return false;
+  if (observed === null) return mode === 'TEST';
+  const observedUrl = parseOrigin(observed);
+  return observedUrl !== null && observedUrl.origin === announcedUrl.origin;
 }
 
 /** S2: the widget only shows itself in, and only talks to, a page of an allowed domain. */

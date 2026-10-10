@@ -6,13 +6,21 @@ import { icons } from '../icons';
 
 const CODE_LENGTH = 6;
 
+function codeErrorDetail(ctx: RenderContext, error: CodeError): string {
+  switch (error.kind) {
+    case 'expired':
+      return escapeHtml(ctx.t.codeExpired);
+    case 'channelUnavailable':
+      return escapeHtml(ctx.t.channelUnavailable);
+    case 'wrong':
+      return `<strong>${escapeHtml(ctx.t.wrongCode)}</strong> ${escapeHtml(
+        error.remainingAttempts > 0 ? ctx.t.attemptsLeft(error.remainingAttempts) : ctx.t.noAttemptLeft,
+      )}`;
+  }
+}
+
 function codeError(ctx: RenderContext, error: CodeError): string {
-  const detail =
-    error.kind === 'expired'
-      ? escapeHtml(ctx.t.codeExpired)
-      : `<strong>${escapeHtml(ctx.t.wrongCode)}</strong> ${escapeHtml(
-          error.remainingAttempts > 0 ? ctx.t.attemptsLeft(error.remainingAttempts) : ctx.t.noAttemptLeft,
-        )}`;
+  const detail = codeErrorDetail(ctx, error);
   return `<div class="lp-error" role="alert" id="lp-code-error">${icons.alert}<span>${detail}</span></div>`;
 }
 
@@ -28,7 +36,7 @@ export function codeStep(
   ctx: RenderContext,
   otp: OtpProgress,
   error: CodeError | null,
-  notice: 'resent' | null,
+  noticeUntil: Date | null,
   resending: boolean,
 ): string {
   const { t } = ctx;
@@ -44,7 +52,7 @@ export function codeStep(
           aria-invalid="${error ? 'true' : 'false'}" ${error ? 'aria-describedby="lp-code-error"' : ''}>
       </div>
       ${when(error !== null, () => codeError(ctx, error ?? { kind: 'expired' }))}
-      ${when(notice === 'resent', () => `<p class="lp-notice" role="status">${escapeHtml(t.codeResent)}</p>`)}
+      <p class="lp-notice" role="status" data-tick="notice" ${noticeUntil !== null && noticeUntil > ctx.now ? '' : 'hidden'}>${escapeHtml(t.codeResent)}</p>
     </div>
     <button type="submit" class="lp-btn lp-btn-primary"><span>${escapeHtml(t.confirm)}</span></button>
     <div class="lp-code-actions">

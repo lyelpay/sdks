@@ -13,6 +13,10 @@ export function applyLiveUpdates(root: HTMLElement, snapshot: ControllerSnapshot
   if (warning && session) {
     warning.hidden = !(isExpiryWarning(session.expiresAt, now) && ['phone', 'code', 'insufficientFunds', 'sendingCode'].includes(state.step));
   }
+  const notice = root.querySelector<HTMLElement>('[data-tick="notice"]');
+  if (notice && state.step === 'code') {
+    notice.hidden = state.noticeUntil === null || state.noticeUntil <= now;
+  }
   const resend = root.querySelector<HTMLButtonElement>('[data-tick="resend"]');
   if (resend && state.step === 'code') {
     const wait = secondsUntil(state.otp.resendAvailableAt, now);

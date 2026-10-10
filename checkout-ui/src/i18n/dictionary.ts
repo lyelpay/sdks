@@ -23,6 +23,7 @@ export interface Dictionary {
   resend: string;
   codeResent: string;
   maxSendsReached: string;
+  channelUnavailable: string;
   changeNumber: string;
   wrongCode: string;
   attemptsLeft: (count: number) => string;

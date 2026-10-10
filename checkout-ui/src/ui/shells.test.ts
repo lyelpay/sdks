@@ -40,6 +40,7 @@ function render(surface: Surface, state: CheckoutState, overrides: Partial<Rende
     showSecuredBadge: true,
     phoneDraft: '',
     redirecting: false,
+    now: new Date('2026-10-10T10:00:00Z'),
     ...overrides,
   });
 }
@@ -104,18 +105,25 @@ describe('embedded block', () => {
 
 describe('code step', () => {
   it('replaces the resend link once no send is left', () => {
-    const html = render('embedded', { step: 'code', otp: { ...otp, remainingSends: 0 }, error: null, notice: null, resending: false });
+    const html = render('embedded', { step: 'code', otp: { ...otp, remainingSends: 0 }, error: null, noticeUntil: null, resending: false });
     expect(html).toContain('Vous avez atteint le nombre maximum d’envois.');
     expect(html).not.toContain('data-action="resend"');
   });
 
-  it('announces a new code', () => {
-    const html = render('embedded', { step: 'code', otp, error: null, notice: 'resent', resending: false });
-    expect(html).toContain('Nouveau code envoyé.');
+  it('announces a new code while the notice lasts, then keeps it hidden in place', () => {
+    const shown = render('embedded', { step: 'code', otp, error: null, noticeUntil: new Date('2026-10-10T10:00:03Z'), resending: false });
+    expect(shown).toMatch(/data-tick="notice" >Nouveau code envoyé\./);
+    const hidden = render('embedded', { step: 'code', otp, error: null, noticeUntil: null, resending: false });
+    expect(hidden).toMatch(/data-tick="notice" hidden>/);
+  });
+
+  it('says when WhatsApp cannot send the code', () => {
+    const html = render('embedded', { step: 'phone', error: 'channelUnavailable' });
+    expect(html).toContain('Impossible d’envoyer le code pour le moment. Réessayez dans quelques minutes.');
   });
 
   it('accepts paste and one-time-code autofill', () => {
-    const html = render('embedded', { step: 'code', otp, error: null, notice: null, resending: false });
+    const html = render('embedded', { step: 'code', otp, error: null, noticeUntil: null, resending: false });
     expect(html).toContain('autocomplete="one-time-code"');
   });
 });
@@ -128,6 +136,18 @@ describe('account not found', () => {
   it('shows it with the configured address', () => {
     const html = render('embedded', { step: 'phone', error: 'notFound' }, { signupUrl: 'https://store.example/lyel' });
     expect(html).toContain('href="https://store.example/lyel"');
+  });
+});
+
+describe('state 8', () => {
+  it('offers "Try again" while a code can still be used or sent', () => {
+    expect(render('embedded', { step: 'insufficientFunds', otp })).toContain('data-action="retry"');
+  });
+
+  it('hides "Try again" and says the send limit is reached otherwise', () => {
+    const html = render('embedded', { step: 'insufficientFunds', otp: { ...otp, remainingAttempts: 0, remainingSends: 0 } });
+    expect(html).not.toContain('data-action="retry"');
+    expect(html).toContain('Vous avez atteint le nombre maximum d’envois.');
   });
 });
 

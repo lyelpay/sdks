@@ -51,8 +51,51 @@ export function bindInteractions(root: HTMLElement, controller: CheckoutControll
   if (surface === 'modal') {
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') controller.close();
+      if (event.key === 'Tab') trapFocus(root, event);
     });
   }
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Mode A: Tab and Shift+Tab cycle inside the dialog. */
+export function trapFocus(root: HTMLElement, event: KeyboardEvent): void {
+  const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
+  if (!dialog) return;
+  const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  const outside = !(active instanceof Node) || !dialog.contains(active);
+  if (event.shiftKey && (active === first || outside)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || outside)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+export interface TypingSnapshot {
+  id: string;
+  value: string;
+  focused: boolean;
+}
+
+/** A re-render within the same step must not wipe what the customer is typing, nor move the focus. */
+export function captureTyping(root: HTMLElement): TypingSnapshot | null {
+  const input = root.querySelector<HTMLInputElement>('#lp-code, #lp-phone');
+  if (!input) return null;
+  return { id: input.id, value: input.value, focused: document.activeElement === input };
+}
+
+export function restoreTyping(root: HTMLElement, typing: TypingSnapshot): void {
+  const input = root.querySelector<HTMLInputElement>(`#${typing.id}`);
+  if (!input || input.disabled) return;
+  input.value = typing.value;
+  if (input.id === 'lp-code') syncCodeBoxes(input);
+  if (typing.focused) input.focus({ preventScroll: true });
 }
 
 /** Moves the focus to what changed, so keyboard and screen-reader users follow the steps. */

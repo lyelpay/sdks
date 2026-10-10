@@ -36,6 +36,24 @@ describe('toCheckoutSession', () => {
     expect(toCheckoutSession({ ...api, showSecuredBadge: false }).merchant.showSecuredBadge).toBe(false);
   });
 
+  it('keeps https return addresses', () => {
+    const urls = { success: 'https://shop.cg/ok', cancel: 'https://shop.cg/ko' };
+    expect(toCheckoutSession({ ...api, mode: 'LIVE', returnUrls: urls }).returnUrls).toEqual(urls);
+  });
+
+  it('keeps http on localhost in TEST only', () => {
+    const urls = { success: 'http://localhost:3000/ok', cancel: 'http://127.0.0.1:3000/ko' };
+    expect(toCheckoutSession({ ...api, returnUrls: urls }).returnUrls).toEqual(urls);
+    expect(toCheckoutSession({ ...api, mode: 'LIVE', returnUrls: urls }).returnUrls).toBeNull();
+  });
+
+  it.each(['javascript:alert(1)', 'http://shop.cg/ok', 'data:text/html,x', 'not a url', '//shop.cg/ok'])(
+    'refuses the return address %s',
+    (bad) => {
+      expect(toCheckoutSession({ ...api, returnUrls: { success: bad, cancel: 'https://shop.cg/ko' } }).returnUrls).toBeNull();
+    },
+  );
+
   it('refuses an unknown status', () => {
     expect(() => toCheckoutSession({ ...api, status: 'PAID' })).toThrow(InvalidResponseError);
   });
