@@ -1,18 +1,14 @@
-/** Stable `code` values the gateway API answers with. Compare `LyelPayApiError.code` against them. */
+/** Stable `code` values the secret-key routes answer with. Compare `LyelPayApiError.code` against them. */
 export const GatewayErrorCodes = {
   E_CANNOT_AUTHENTICATE: 'E_CANNOT_AUTHENTICATE',
   E_INVALID_API_KEY: 'E_INVALID_API_KEY',
-  E_GATEWAY_NOT_ACTIVATED: 'E_GATEWAY_NOT_ACTIVATED',
+  E_UNAUTHORIZED: 'E_UNAUTHORIZED',
   E_GATEWAY_SUSPENDED: 'E_GATEWAY_SUSPENDED',
   E_GATEWAY_INTENT_NOT_FOUND: 'E_GATEWAY_INTENT_NOT_FOUND',
-  E_GATEWAY_INTENT_INACTIVE: 'E_GATEWAY_INTENT_INACTIVE',
   E_GATEWAY_INTENT_NOT_CANCELABLE: 'E_GATEWAY_INTENT_NOT_CANCELABLE',
   E_GATEWAY_RETURN_URL_FORBIDDEN: 'E_GATEWAY_RETURN_URL_FORBIDDEN',
   E_GATEWAY_RETURN_URLS_INCOMPLETE: 'E_GATEWAY_RETURN_URLS_INCOMPLETE',
   E_GATEWAY_INVALID_PHONE: 'E_GATEWAY_INVALID_PHONE',
-  E_GATEWAY_PAYMENT_IN_PROGRESS: 'E_GATEWAY_PAYMENT_IN_PROGRESS',
-  E_GATEWAY_PAYMENT_DECLINED: 'E_GATEWAY_PAYMENT_DECLINED',
-  E_GATEWAY_INSUFFICIENT_FUNDS: 'E_GATEWAY_INSUFFICIENT_FUNDS',
 } as const;
 
 export type GatewayErrorCode = (typeof GatewayErrorCodes)[keyof typeof GatewayErrorCodes];
@@ -36,6 +32,17 @@ export class LyelPayApiError extends Error {
     this.statusCode = details.statusCode;
     this.code = details.code;
     this.retryAfterSeconds = details.retryAfterSeconds;
+  }
+}
+
+/** A 2xx answer the SDK cannot read: not JSON, or not the shape of the API contract this version targets. */
+export class LyelPayUnexpectedResponseError extends Error {
+  readonly statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.name = 'LyelPayUnexpectedResponseError';
+    this.statusCode = statusCode;
   }
 }
 

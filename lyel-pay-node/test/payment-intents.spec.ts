@@ -1,4 +1,4 @@
-import { LyelPay, LyelPayApiError, GatewayErrorCodes } from '../src';
+import { LyelPay, LyelPayApiError, LyelPayUnexpectedResponseError, GatewayErrorCodes } from '../src';
 
 const SECRET = 'sk_test_abc123';
 const BASE_URL = 'https://api.example.test';
@@ -142,17 +142,21 @@ describe('PaymentIntents', () => {
       expect(intent.webhook.attempts).toBe(0);
     });
 
-    it('encodes the id so it cannot change the path', async () => {
+    it.each(['..', '.', '%2e%2e', '../keys', 'not-a-uuid', ''])(
+      'rejects the id %p before any call, so it cannot rewrite the path',
+      async (id) => {
+        await expect(lyel.paymentIntents.retrieve(id)).rejects.toThrow(TypeError);
+        await expect(lyel.paymentIntents.cancel(id)).rejects.toThrow(TypeError);
+        expect(fetchMock).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts an upper-case UUID', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(200, readIntent));
 
-      await lyel.paymentIntents.retrieve('../keys');
+      await lyel.paymentIntents.retrieve(INTENT_ID.toUpperCase());
 
-      expect(lastCall().url).toBe(`${BASE_URL}/gateway/v1/payment-intents/..%2Fkeys`);
-    });
-
-    it('rejects an empty id without calling the API', async () => {
-      await expect(lyel.paymentIntents.retrieve('')).rejects.toThrow(TypeError);
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(lastCall().url).toBe(`${BASE_URL}/gateway/v1/payment-intents/${INTENT_ID.toUpperCase()}`);
     });
   });
 
@@ -191,26 +195,55 @@ describe('PaymentIntents', () => {
     });
   });
 
+  describe('unexpected responses', () => {
+    it.each([
+      ['an unknown status', { ...readIntent, status: 'REFUNDED' }],
+      ['an unknown mode', { ...readIntent, mode: 'SANDBOX' }],
+      ['no id', { ...readIntent, id: undefined }],
+      ['an array', [readIntent]],
+      ['null', null],
+    ])('rejects a 2xx read with %s', async (_label, body) => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, body));
+
+      await expect(lyel.paymentIntents.retrieve(INTENT_ID)).rejects.toThrow(LyelPayUnexpectedResponseError);
+    });
+
+    it('rejects a created intent without a session token', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(201, { ...createdIntent, sessionToken: undefined }));
+
+      await expect(lyel.paymentIntents.create({ amount: '500', currency: 'XAF' })).rejects.toMatchObject({
+        name: 'LyelPayUnexpectedResponseError',
+        statusCode: 201,
+      });
+    });
+
+    it('rejects a 2xx answer that is not JSON with an SDK error, not a SyntaxError', async () => {
+      fetchMock.mockResolvedValueOnce(new Response('<html>ok</html>', { status: 200 }));
+
+      await expect(lyel.paymentIntents.retrieve(INTENT_ID)).rejects.toThrow(LyelPayUnexpectedResponseError);
+    });
+  });
+
   describe('errors', () => {
     it('throws a typed error carrying the API code and message', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse(409, { message: 'The payment is being processed: read the status', code: 'E_GATEWAY_PAYMENT_IN_PROGRESS' }),
+        jsonResponse(403, { message: 'Live mode is not enabled for this merchant', code: 'E_UNAUTHORIZED' }),
       );
 
       const error = await lyel.paymentIntents.retrieve(INTENT_ID).catch((e: unknown) => e);
 
       expect(error).toBeInstanceOf(LyelPayApiError);
       expect(error).toMatchObject({
-        statusCode: 409,
-        code: GatewayErrorCodes.E_GATEWAY_PAYMENT_IN_PROGRESS,
-        message: 'The payment is being processed: read the status',
+        statusCode: 403,
+        code: GatewayErrorCodes.E_UNAUTHORIZED,
+        message: 'Live mode is not enabled for this merchant',
         retryAfterSeconds: null,
       });
     });
 
     it('reads Retry-After on rate-limited answers', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse(429, { message: 'Wait', code: 'E_GATEWAY_OTP_RESEND_TOO_SOON' }, { 'Retry-After': '30' }),
+        jsonResponse(429, { message: 'Too many requests', code: 'E_TOO_MANY_REQUESTS' }, { 'Retry-After': '30' }),
       );
 
       await expect(lyel.paymentIntents.retrieve(INTENT_ID)).rejects.toMatchObject({ retryAfterSeconds: 30 });

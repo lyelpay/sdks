@@ -1,11 +1,17 @@
-import { LyelPayApiError } from './errors';
+import { LyelPayApiError, LyelPayUnexpectedResponseError } from './errors';
+import { isRecord } from './guards';
 import { LyelPayConfig } from './types';
 
 const DEFAULT_BASE_URL = 'https://api.lyelpay.com';
 
 export type HttpMethod = 'GET' | 'POST';
 
-/** Sends authenticated JSON requests to the gateway API and turns non-2xx answers into LyelPayApiError. */
+export type ResponseGuard<T> = (value: unknown) => value is T;
+
+/**
+ * Sends authenticated JSON requests to the gateway API. Non-2xx answers become LyelPayApiError;
+ * a 2xx answer that is not JSON or fails `isExpected` becomes LyelPayUnexpectedResponseError.
+ */
 export class HttpClient {
   private readonly secretKey: string;
   private readonly baseUrl: string;
@@ -15,7 +21,7 @@ export class HttpClient {
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   }
 
-  async request<T>(method: HttpMethod, path: string, body?: object): Promise<T> {
+  async request<T>(method: HttpMethod, path: string, isExpected: ResponseGuard<T>, body?: object): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -27,27 +33,30 @@ export class HttpClient {
 
     if (!res.ok) throw await toApiError(res);
 
-    const payload: unknown = await res.json();
-    // Trust boundary: the shape is the lyel-pay-api OpenAPI contract this SDK version is pinned to.
-    return payload as T;
+    const payload = await readJson(res);
+    if (!isExpected(payload)) {
+      throw new LyelPayUnexpectedResponseError(res.status, `Unexpected response from ${method} ${path}`);
+    }
+    return payload;
   }
 }
 
-async function toApiError(res: Response): Promise<LyelPayApiError> {
-  const body = await res.json().then(
+/** `undefined` when the body is not JSON: it never matches a guard nor an error shape. */
+async function readJson(res: Response): Promise<unknown> {
+  return res.json().then(
     (parsed: unknown) => parsed,
-    () => null,
+    () => undefined,
   );
+}
+
+async function toApiError(res: Response): Promise<LyelPayApiError> {
+  const body = await readJson(res);
   return new LyelPayApiError({
     statusCode: res.status,
     message: readMessage(body) ?? `HTTP ${String(res.status)}`,
     code: readCode(body),
     retryAfterSeconds: readRetryAfter(res.headers.get('Retry-After')),
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** API errors carry a string message; request validation errors carry a list of them. */

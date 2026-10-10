@@ -19,6 +19,7 @@ export type { ConstructEventOptions } from './webhooks';
 export {
   GatewayErrorCodes,
   LyelPayApiError,
+  LyelPayUnexpectedResponseError,
   LyelPayWebhookPayloadError,
   LyelPayWebhookSignatureError,
 } from './errors';

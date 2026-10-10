@@ -3,14 +3,18 @@ export interface LyelPayConfig {
   baseUrl?: string;
 }
 
-export type PaymentIntentMode = 'LIVE' | 'TEST';
+export const PAYMENT_INTENT_MODES = ['LIVE', 'TEST'] as const;
+
+export type PaymentIntentMode = (typeof PAYMENT_INTENT_MODES)[number];
 
 export type GatewayCurrency = 'XAF' | 'XOF';
 
 export type CheckoutLocale = 'fr' | 'en';
 
 /** Only `COMPLETED` proves a payment. A pending intent past its deadline reads `EXPIRED`. */
-export type PaymentIntentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'EXPIRED' | 'CANCELED';
+export const PAYMENT_INTENT_STATUSES = ['PENDING', 'COMPLETED', 'FAILED', 'EXPIRED', 'CANCELED'] as const;
+
+export type PaymentIntentStatus = (typeof PAYMENT_INTENT_STATUSES)[number];
 
 export type PaymentFailureReason = 'OTP_ATTEMPTS_EXHAUSTED' | 'TOO_MANY_UNKNOWN_PAYERS' | 'DECLINED';
 
@@ -27,9 +31,15 @@ export interface CreatePaymentIntentParams {
   currency: GatewayCurrency;
   description?: string;
   metadata?: Record<string, unknown>;
-  /** Hosted page: give it together with `cancelUrl`. Must belong to your allowed domains (https in LIVE). */
+  /**
+   * Hosted page: where the customer returns after paying. Falls back to your default success URL.
+   * Must belong to your allowed domains (https in LIVE).
+   */
   successUrl?: string;
-  /** Hosted page: give it together with `successUrl`. Must belong to your allowed domains (https in LIVE). */
+  /**
+   * Hosted page: where the customer returns after cancelling. Falls back to your default cancel URL.
+   * Must belong to your allowed domains (https in LIVE).
+   */
   cancelUrl?: string;
   customer?: PaymentIntentCustomer;
   /** Defaults to the merchant setting. */
@@ -49,7 +59,7 @@ export interface CreatedPaymentIntent {
   expiresAt: string;
   successUrl: string | null;
   cancelUrl: string | null;
-  /** Hosted payment page to redirect the customer to; `null` without return URLs. */
+  /** Hosted payment page to redirect the customer to; `null` when no success and cancel URL could be resolved. */
   checkoutUrl: string | null;
 }
 

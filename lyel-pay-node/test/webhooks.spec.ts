@@ -15,25 +15,32 @@ function signLikeTheApi(
   return { payload, header: `t=${String(timestamp)},v1=${signature}` };
 }
 
-function canceledMessage(): Record<string, unknown> {
+function canceledMessage(data: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'evt_7d1d1c3a-5b7e-4f0e-9a51-3b2a6f0e8c11',
     event: 'payment.canceled',
     data: {
-      id: '7d1d1c3a-5b7e-4f0e-9a51-3b2a6f0e8c11',
-      reference: 'GWP-1',
-      amount: '15000.0000',
-      currency: 'XAF',
-      mode: 'TEST',
-      status: 'CANCELED',
-      description: null,
-      metadata: { orderId: '1042' },
-      payerPhoneNumber: null,
-      failureReason: null,
-      createdAt: '2026-10-06T10:00:00.000Z',
-      completedAt: null,
-      canceledAt: '2026-10-06T10:02:00.000Z',
+      ...canceledData(),
+      ...data,
     },
+  };
+}
+
+function canceledData(): Record<string, unknown> {
+  return {
+    id: '7d1d1c3a-5b7e-4f0e-9a51-3b2a6f0e8c11',
+    reference: 'GWP-1',
+    amount: '15000.0000',
+    currency: 'XAF',
+    mode: 'TEST',
+    status: 'CANCELED',
+    description: null,
+    metadata: { orderId: '1042' },
+    payerPhoneNumber: null,
+    failureReason: null,
+    createdAt: '2026-10-06T10:00:00.000Z',
+    completedAt: null,
+    canceledAt: '2026-10-06T10:02:00.000Z',
   };
 }
 
@@ -123,6 +130,21 @@ describe('Webhooks.constructEvent', () => {
     expect(() => webhooks.constructEvent(payload, header, SECRET, { toleranceSeconds: 30 })).toThrow(
       'outside the tolerance',
     );
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0, 1.5])(
+    'rejects a tolerance of %p instead of disabling the replay check',
+    (toleranceSeconds) => {
+      const { payload, header } = signLikeTheApi(canceledMessage(), 0);
+
+      expect(() => webhooks.constructEvent(payload, header, SECRET, { toleranceSeconds })).toThrow(TypeError);
+    },
+  );
+
+  it('rejects a correctly signed event with an unknown intent status', () => {
+    const { payload, header } = signLikeTheApi(canceledMessage({ status: 'REFUNDED' }), NOW_SECONDS);
+
+    expect(() => webhooks.constructEvent(payload, header, SECRET)).toThrow('Unknown webhook event');
   });
 
   it.each([

@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { LyelPayWebhookPayloadError, LyelPayWebhookSignatureError } from './errors';
-import { WEBHOOK_EVENT_TYPES, WebhookEvent, WebhookEventType } from './types';
+import { isWebhookEvent } from './guards';
+import { WebhookEvent } from './types';
 
 /** Header carrying `t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">`. Node lowercases header names. */
 export const WEBHOOK_SIGNATURE_HEADER = 'x-lyel-signature';
@@ -10,7 +11,7 @@ const UNIX_SECONDS = /^\d{1,12}$/;
 const SHA256_HEX = /^[0-9a-f]{64}$/i;
 
 export interface ConstructEventOptions {
-  /** Maximum age (and clock skew) of the signed timestamp. Defaults to 300 seconds. */
+  /** Maximum age (and clock skew) of the signed timestamp, a positive whole number of seconds. Defaults to 300. */
   toleranceSeconds?: number;
 }
 
@@ -31,11 +32,15 @@ export class Webhooks {
     options: ConstructEventOptions = {},
   ): WebhookEvent {
     if (secret.length === 0) throw new TypeError('A webhook secret is required');
+    const toleranceSeconds = options.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS;
+    if (!Number.isSafeInteger(toleranceSeconds) || toleranceSeconds <= 0) {
+      throw new TypeError('toleranceSeconds must be a positive whole number');
+    }
 
     const rawBody = typeof payload === 'string' ? payload : payload.toString('utf8');
     const { timestamp, signature } = parseHeader(Array.isArray(header) ? header[0] : header);
 
-    assertFresh(Number(timestamp), options.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS);
+    assertFresh(Number(timestamp), toleranceSeconds);
     assertSigned(`${timestamp}.${rawBody}`, signature, secret);
 
     return parseEvent(rawBody);
@@ -83,24 +88,4 @@ function parseEvent(rawBody: string): WebhookEvent {
     throw new LyelPayWebhookPayloadError('Unknown webhook event: upgrade @lyel/lyel-pay-node');
   }
   return parsed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isWebhookEventType(value: unknown): value is WebhookEventType {
-  return WEBHOOK_EVENT_TYPES.some((type) => type === value);
-}
-
-function isWebhookEvent(value: unknown): value is WebhookEvent {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    isWebhookEventType(value.event) &&
-    typeof value.timestamp === 'number' &&
-    isRecord(value.data) &&
-    typeof value.data.id === 'string' &&
-    typeof value.data.status === 'string'
-  );
 }

@@ -50,7 +50,7 @@ Then confirm with the webhook (below). The browser's `onSuccess` only shows "tha
 
 ### Mode C — Hosted page and redirect
 
-No browser SDK. Give both return URLs (they must belong to your allowed domains, `https` in LIVE) and redirect the customer to `checkoutUrl`.
+No browser SDK. Give the return URLs and redirect the customer to `checkoutUrl`. A URL you leave out falls back to the default you set in your portal; both must end up set, and belong to your allowed domains (`https` in LIVE).
 
 ```ts
 app.post('/checkout', async (req, res) => {
@@ -63,8 +63,13 @@ app.post('/checkout', async (req, res) => {
     cancelUrl: 'https://shop.example/panier',
   });
 
+  if (intent.checkoutUrl === null) {
+    // No success/cancel URL could be resolved: hosted page unavailable for this intent.
+    return res.status(500).send('Hosted checkout is not configured');
+  }
+
   await orders.attachIntent('1042', intent.id);
-  res.redirect(303, intent.checkoutUrl!); // non-null when both return URLs are given
+  res.redirect(303, intent.checkoutUrl);
 });
 ```
 
@@ -92,7 +97,8 @@ const intent = await lyel.paymentIntents.retrieve(id);
 // intent.status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'EXPIRED' | 'CANCELED'
 
 const canceled = await lyel.paymentIntents.cancel(id);
-// Only a PENDING intent can be canceled. Calling cancel again answers the same CANCELED intent.
+// Only a PENDING intent can be canceled; otherwise it throws E_GATEWAY_INTENT_NOT_CANCELABLE.
+// Calling cancel again on a CANCELED intent answers the same intent.
 ```
 
 ## Webhooks
@@ -145,7 +151,9 @@ app.post('/webhooks/lyel', express.raw({ type: 'application/json' }), async (req
 
 ## Errors
 
-A non-2xx answer throws `LyelPayApiError` with `statusCode`, `message`, `code` and `retryAfterSeconds` (from `Retry-After`, or `null`). `code` is `null` for request validation errors (400).
+A non-2xx answer throws `LyelPayApiError` with `statusCode`, `message`, `code` and `retryAfterSeconds` (from `Retry-After`, or `null`). `code` is `null` for request validation errors (400). A 2xx answer the SDK cannot read throws `LyelPayUnexpectedResponseError`.
+
+`retrieve` and `cancel` throw a `TypeError` before any call when the id is not a UUID.
 
 ```ts
 import { GatewayErrorCodes, LyelPayApiError } from '@lyel/lyel-pay-node';
@@ -161,17 +169,23 @@ try {
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `E_GATEWAY_RETURN_URL_FORBIDDEN` | 400 | A return URL is outside your allowed domains (or not `https` in LIVE) |
-| `E_GATEWAY_RETURN_URLS_INCOMPLETE` | 400 | `successUrl` and `cancelUrl` must be given together |
-| `E_GATEWAY_INTENT_NOT_FOUND` | 404 | No intent with this id for your account |
-| `E_GATEWAY_INTENT_NOT_CANCELABLE` | 409 | The intent is no longer pending |
-| `E_GATEWAY_PAYMENT_IN_PROGRESS` | 409 | A payment is being processed: read the status |
-| `E_GATEWAY_SUSPENDED` | 403 | Online payment is suspended for your account |
+| `E_CANNOT_AUTHENTICATE` | 401 | Missing or malformed `Authorization` header |
 | `E_INVALID_API_KEY` | 401 | Unknown or malformed secret key |
+| `E_UNAUTHORIZED` | 403 | LIVE key used while LIVE mode is not enabled for your account |
+| `E_GATEWAY_SUSPENDED` | 403 | Online payment is suspended for your account |
+| `E_GATEWAY_RETURN_URL_FORBIDDEN` | 400 | A return URL is outside your allowed domains (or not `https` in LIVE) |
+| `E_GATEWAY_RETURN_URLS_INCOMPLETE` | 400 | Only one of the success and cancel URLs could be resolved |
+| `E_GATEWAY_INVALID_PHONE` | 400 | `customer.phone` is not a valid phone number |
+| `E_GATEWAY_INTENT_NOT_FOUND` | 404 | No intent with this id for your account and key mode |
+| `E_GATEWAY_INTENT_NOT_CANCELABLE` | 409 | The intent is no longer pending |
 
 ## Upgrading from 0.1
 
 - `paymentIntents.retrieve` now takes the intent **id** (it used to take the session token).
 - `create` returns `CreatedPaymentIntent`, with `checkoutUrl`, `successUrl` and `cancelUrl`.
 - Webhook events follow the API body: `{ id, event, timestamp, data }` (was `{ type, created, data.paymentIntent }`, which never matched what the API sends).
-- Errors are `LyelPayApiError` instances with a `code`.
+- Errors are `LyelPayApiError` instances with a `code`; the `LyelPayError` interface is removed.
+- The `LyelPayMode` type is removed; use `PaymentIntentMode` (`'LIVE' | 'TEST'`).
+- `PaymentIntentStatus` gains `CANCELED`: handle it in any exhaustive `switch`.
+- The constructor options are `Omit<LyelPayConfig, 'secretKey'>` (was `Partial<LyelPayConfig>`): the key is the first argument only.
+- `retrieve` and `cancel` reject non-UUID ids with a `TypeError`.
