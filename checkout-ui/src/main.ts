@@ -1,123 +1,122 @@
-import { StateMachine, CheckoutParams } from './state';
-import { render } from './ui';
-import { requestOtp, confirmPayment } from './api';
 import './styles.css';
+import { createCheckoutApi } from './api/checkout-api';
+import { CheckoutController, type ControllerSnapshot } from './app/checkout-controller';
+import { embeddedHost, hostedHost, type CheckoutHost } from './app/checkout-host';
+import { readConfig, type CheckoutConfig } from './config/env';
+import { buildTheme } from './domain/contrast';
+import { parseLaunchParams, type LaunchParams } from './launch/launch-params';
+import { createParentChannel } from './messaging/contract';
+import { buildRenderContext } from './ui/build-context';
+import { bindInteractions, captureTyping, focusStep, restoreTyping } from './ui/dom-binding';
+import { applyLiveUpdates } from './ui/live-updates';
+import { renderShell } from './ui/shells';
+import { applyTheme } from './ui/theme';
+import { initialState } from './app/checkout-machine';
 
-function parseParams(): CheckoutParams | null {
-  const p = new URLSearchParams(window.location.search);
-  const pk = p.get('pk');
-  const sessionToken = p.get('st');
-  const amount = p.get('amount');
-  const currency = p.get('currency');
-  const origin = p.get('origin');
+const TICK_MS = 1000;
 
-  if (!pk || !sessionToken || !amount || !currency || !origin) return null;
+function isFramed(): boolean {
+  return window.self !== window.top;
+}
 
-  return {
-    pk,
-    sessionToken,
-    amount,
-    currency,
-    origin: decodeURIComponent(origin),
-    merchantName: p.get('merchant_name') ? decodeURIComponent(p.get('merchant_name')!) : 'Merchant',
-    locale: p.get('locale') ?? 'fr',
-    isSandbox: pk.startsWith('pk_test_'),
+/** S2: the parent origin as the browser reports it; null when it cannot be known. */
+function observedParentOrigin(): string | null {
+  const ancestors = 'ancestorOrigins' in window.location ? window.location.ancestorOrigins : null;
+  const ancestor = ancestors && ancestors.length > 0 ? ancestors.item(0) : null;
+  if (ancestor) return ancestor;
+  try {
+    return document.referrer ? new URL(document.referrer).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Modes A and B live in the SDK iframe; the hosted page must never be framed (anti-clickjacking). */
+function createHost(launch: LaunchParams): CheckoutHost | null {
+  if (launch.surface === 'hosted') return isFramed() ? null : hostedHost(window.location);
+  if (!isFramed() || !launch.parentOrigin) return null;
+  return embeddedHost(createParentChannel(window.parent, launch.parentOrigin));
+}
+
+function renderUnavailable(root: HTMLElement, launch: LaunchParams | null, config: CheckoutConfig): void {
+  const fallback: LaunchParams = launch ?? {
+    surface: 'hosted',
+    intentId: null,
+    publishableKey: '',
+    sessionToken: '',
+    parentOrigin: null,
+    locale: null,
+    framed: true,
+    buttonLabel: null,
   };
+  const snapshot: ControllerSnapshot = { state: { step: 'unavailable' }, session: null, phoneDraft: '', redirecting: false };
+  root.innerHTML = renderShell(buildRenderContext(snapshot, fallback, config, new Date()));
 }
 
-function postToParent(origin: string, message: Record<string, unknown>): void {
-  window.parent.postMessage(message, origin);
-}
-
-function init(): void {
-  const root = document.getElementById('app')!;
-  const params = parseParams();
-
-  if (!params) {
-    root.innerHTML = '<div class="card"><div class="result-icon failed">✕</div><div class="result-title">Invalid checkout link</div></div>';
+function start(root: HTMLElement): void {
+  const config = readConfig(import.meta.env);
+  applyTheme(document.documentElement, buildTheme(null));
+  const launch = parseLaunchParams(window.location);
+  const host = launch ? createHost(launch) : null;
+  if (!launch || !host) {
+    renderUnavailable(root, launch, config);
     return;
   }
 
-  const machine = new StateMachine();
-  const apiOpts = { pk: params.pk, sessionToken: params.sessionToken };
+  let previousStep = initialState().step;
+  const render = (snapshot: ControllerSnapshot): void => {
+    const now = new Date();
+    const ctx = buildRenderContext(snapshot, launch, config, now);
+    applyTheme(document.documentElement, buildTheme(snapshot.session?.merchant.primaryColor ?? null));
+    document.documentElement.lang = ctx.locale;
+    const sameStep = snapshot.state.step === previousStep;
+    const typing = sameStep ? captureTyping(root) : null;
+    root.innerHTML = renderShell(ctx);
+    if (typing) restoreTyping(root, typing);
+    applyLiveUpdates(root, snapshot, ctx.t, now);
+    const firstScreen = previousStep === 'loading';
+    if (!sameStep && !(firstScreen && launch.surface === 'embedded')) focusStep(root);
+    previousStep = snapshot.state.step;
+  };
 
-  machine.subscribe((state) => {
-    render(root, state, params);
-    attachHandlers(root, state.name, params, machine, apiOpts);
-
-    if (state.name === 'SUCCESS') {
-      postToParent(params.origin, { type: 'LYEL_PAY_SUCCESS', reference: state.reference });
-    }
-    if (state.name === 'FAILED') {
-      postToParent(params.origin, { type: 'LYEL_PAY_FAILED', reason: state.reason });
-    }
+  const controller = new CheckoutController({
+    api: createCheckoutApi(config.apiBaseUrl, launch),
+    host,
+    surface: launch.surface,
+    parentOrigin: launch.parentOrigin,
+    observedParentOrigin: launch.surface === 'hosted' ? null : observedParentOrigin(),
+    expectedIntentId: launch.intentId,
+    onChange: render,
   });
 
-  machine.transition({ name: 'PHONE_INPUT' });
+  bindInteractions(root, controller, launch.surface, (url) => {
+    window.location.assign(url);
+  });
+
+  const ticker = window.setInterval(() => {
+    const snapshot = controller.snapshot;
+    const now = new Date();
+    applyLiveUpdates(root, snapshot, buildRenderContext(snapshot, launch, config, now).t, now);
+    if (snapshot.session && snapshot.session.expiresAt <= now) controller.expiryReached();
+  }, TICK_MS);
+
+  const resizeObserver =
+    launch.surface === 'embedded'
+      ? new ResizeObserver(() => {
+          controller.notify({ type: 'resize', height: Math.ceil(document.documentElement.scrollHeight) });
+        })
+      : null;
+  resizeObserver?.observe(document.body);
+
+  window.addEventListener('pagehide', () => {
+    window.clearInterval(ticker);
+    resizeObserver?.disconnect();
+    controller.dispose();
+  });
+
+  render(controller.snapshot);
+  void controller.start();
 }
 
-function attachHandlers(
-  root: HTMLElement,
-  stateName: string,
-  params: CheckoutParams,
-  machine: StateMachine,
-  apiOpts: { pk: string; sessionToken: string },
-): void {
-  if (stateName === 'PHONE_INPUT') {
-    root.querySelector<HTMLFormElement>('#phone-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const phone = (root.querySelector<HTMLInputElement>('#phone')?.value ?? '').trim();
-      if (!phone) return;
-
-      machine.transition({ name: 'SENDING_OTP', phoneNumber: phone });
-      try {
-        await requestOtp(apiOpts, phone);
-        machine.transition({ name: 'OTP_INPUT', phoneNumber: phone });
-      } catch (err) {
-        machine.transition({ name: 'PHONE_INPUT', error: (err as Error).message });
-      }
-    });
-  }
-
-  if (stateName === 'OTP_INPUT') {
-    const currentState = machine.current;
-    const phoneNumber = currentState.name === 'OTP_INPUT' ? currentState.phoneNumber : '';
-
-    root.querySelector<HTMLFormElement>('#otp-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const otp = (root.querySelector<HTMLInputElement>('#otp')?.value ?? '').trim();
-      if (otp.length !== 6) return;
-
-      machine.transition({ name: 'CONFIRMING', phoneNumber });
-      try {
-        const result = await confirmPayment(apiOpts, otp);
-        if (result.status === 'COMPLETED') {
-          machine.transition({ name: 'SUCCESS', reference: result.reference });
-        } else {
-          machine.transition({ name: 'FAILED', reason: 'Payment could not be completed.' });
-        }
-      } catch (err) {
-        machine.transition({ name: 'OTP_INPUT', phoneNumber, error: (err as Error).message });
-      }
-    });
-
-    root.querySelector('#resend-link')?.addEventListener('click', async () => {
-      machine.transition({ name: 'SENDING_OTP', phoneNumber });
-      try {
-        await requestOtp(apiOpts, phoneNumber);
-        machine.transition({ name: 'OTP_INPUT', phoneNumber });
-      } catch (err) {
-        machine.transition({ name: 'OTP_INPUT', phoneNumber, error: (err as Error).message });
-      }
-    });
-  }
-
-  // Close button message from parent
-  window.addEventListener('message', (ev) => {
-    if (ev.data?.type === 'LYEL_PAY_CLOSE') {
-      postToParent(params.origin, { type: 'LYEL_PAY_CLOSED' });
-    }
-  }, { once: false });
-}
-
-init();
+const root = document.getElementById('app');
+if (root) start(root);

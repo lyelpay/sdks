@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
+  readonly VITE_LYEL_PAY_SIGNUP_URL?: string;
 }
 
 interface ImportMeta {
