@@ -48,6 +48,8 @@ export class CheckoutController {
   private polls = 0;
   private expiryChecked = false;
   private parentConfirmation: Promise<boolean> | null = null;
+  /** An outcome reaches the parent once: a bfcache restore re-reads it but must not post it again. */
+  private announcedOutcome: WidgetMessage['type'] | null = null;
   /** Timers of the current step: cleared on every step change and on dispose. */
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly now: () => Date;
@@ -144,6 +146,7 @@ export class CheckoutController {
    */
   pageRestored(): void {
     this.expiryChecked = false;
+    this.redirecting = false;
     this.dispatch({ type: 'pageRestored' });
   }
 
@@ -234,7 +237,10 @@ export class CheckoutController {
   private announce(previous: CheckoutState): void {
     if (!this.session) return;
     const message = outcomeMessageFor(previous, this.state, this.session);
-    if (message) this.notify(message);
+    if (message && message.type !== this.announcedOutcome) {
+      this.announcedOutcome = message.type;
+      this.notify(message);
+    }
     this.scheduleAutoLeave(previous);
   }
 

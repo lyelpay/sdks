@@ -348,6 +348,40 @@ describe('CheckoutController, page restored from the back/forward cache', () => 
     expect(controller.snapshot.state.step).toBe('unavailable');
   });
 
+  it('never posts the same outcome twice to the parent (modes A and B)', async () => {
+    const api = fakeApi();
+    const { host, messages } = fakeHost();
+    const controller = controllerWith(api, host);
+    await onCodeStep(controller);
+    await controller.confirm('000000');
+    api.readStatus.mockResolvedValue(session({ status: 'COMPLETED' }));
+    controller.pageRestored();
+    await vi.runOnlyPendingTimersAsync();
+    expect(controller.snapshot.state.step).toBe('success');
+    expect(messages.filter((message) => message.type === 'success')).toHaveLength(1);
+  });
+
+  it('clears the redirect notice on the hosted page and does not redirect a second time', async () => {
+    const api = fakeApi();
+    const { host, redirects } = fakeHost();
+    const controller = controllerWith(api, host, {
+      surface: 'hosted',
+      parentOrigin: null,
+      observedParentOrigin: null,
+      expectedIntentId: 'pi_1',
+    });
+    await onCodeStep(controller);
+    await controller.confirm('000000');
+    expect(controller.snapshot.redirecting).toBe(true);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(redirects).toEqual(['https://shop.cg/ok']);
+    api.readStatus.mockResolvedValue(session({ status: 'COMPLETED' }));
+    controller.pageRestored();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(controller.snapshot.redirecting).toBe(false);
+    expect(redirects).toEqual(['https://shop.cg/ok']);
+  });
+
   it('does not leave the page again for a payment that was already made', async () => {
     const api = fakeApi();
     const { host, redirects } = fakeHost();
