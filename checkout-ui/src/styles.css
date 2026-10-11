@@ -19,9 +19,9 @@
   --lp-warning-bg: #fff1dc;
   --lp-success: #0e7a55;
   --lp-success-bg: #e3f4ec;
-  --lp-test-bg: #fff4f0;
-  --lp-test-border: #e2522f;
-  --lp-test-banner: #fe6a49;
+  --lp-test-bg: #f1f6f7;
+  --lp-test-border: #08313a;
+  --lp-test-banner: #dbe7ea;
   --lp-backdrop: rgba(8, 49, 58, 0.62);
   --lp-card-shadow: 0 1px 2px rgba(8, 49, 58, 0.06), 0 12px 32px rgba(8, 49, 58, 0.1);
   --lp-dialog-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
