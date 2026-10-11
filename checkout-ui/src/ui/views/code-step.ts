@@ -24,6 +24,14 @@ function codeError(ctx: RenderContext, error: CodeError): string {
   return `<div class="lp-error" role="alert" id="lp-code-error">${icons.alert}<span>${detail}</span></div>`;
 }
 
+/** In TEST no WhatsApp message leaves: say so, as the test data box does. */
+function codeSentInfo(ctx: RenderContext, otp: OtpProgress): string {
+  const testMode = ctx.session?.mode === 'TEST';
+  const icon = testMode ? icons.flask : icons.whatsapp;
+  const text = testMode ? ctx.t.codeSentTest : ctx.t.codeSent(otp.maskedPhoneNumber);
+  return `<div class="lp-info">${icon}<p>${escapeHtml(text)}</p></div>`;
+}
+
 function resendControl(ctx: RenderContext, otp: OtpProgress, resending: boolean): string {
   if (otp.remainingSends <= 0 || otp.resendAvailableAt === null) {
     return `<p class="lp-muted-sm lp-resend-max" role="status">${escapeHtml(ctx.t.maxSendsReached)}</p>`;
@@ -42,7 +50,7 @@ export function codeStep(
   const { t } = ctx;
   const boxes = Array.from({ length: CODE_LENGTH }, () => '<span class="lp-code-box"></span>').join('');
   return `<form class="lp-stack" data-form="code" novalidate>
-    <div class="lp-info">${icons.whatsapp}<p>${escapeHtml(t.codeSent(otp.maskedPhoneNumber))}</p></div>
+    ${codeSentInfo(ctx, otp)}
     <div class="lp-field">
       <label class="lp-label" for="lp-code">${escapeHtml(t.codeLabel)}</label>
       <div class="lp-code${error ? ' is-invalid' : ''}">

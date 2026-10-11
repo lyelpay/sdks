@@ -35,6 +35,7 @@ export type CheckoutEvent =
   | { type: 'confirmed' }
   | { type: 'changeNumber' }
   | { type: 'retryAfterNetworkError' }
+  | { type: 'pageRestored' }
   | { type: 'embeddingRefused' }
   | { type: 'requestFailed'; failure: RequestFailure };
 
@@ -190,6 +191,9 @@ export function reduce(current: CheckoutState, event: CheckoutEvent): Transition
       return stay({ step: 'phone', error: null });
     case 'retryAfterNetworkError':
       return stay({ step: 'loading', initial: false }, 'refreshStatus');
+    // Like a reload: an outcome found there is shown as such, and the hosted page does not leave again.
+    case 'pageRestored':
+      return stay(initialState(), 'refreshStatus');
     case 'embeddingRefused':
       return stay({ step: 'unavailable' });
     case 'requestFailed':

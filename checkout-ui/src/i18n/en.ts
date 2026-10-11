@@ -20,6 +20,7 @@ export const en: Dictionary = {
   notFoundFixNoLink: 'Check the number above.',
   createAccount: 'Create a Lyel Pay account',
   codeSent: (maskedPhone) => `We sent a 6-digit code on WhatsApp to ${maskedPhone}.`,
+  codeSentTest: 'Test mode: no message is sent. Enter 000000.',
   codeLabel: 'Confirmation code',
   codeAria: '6-digit confirmation code',
   confirm: 'Confirm',

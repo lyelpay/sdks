@@ -1,8 +1,9 @@
+import type { WidgetMessage } from '@lyel/checkout-protocol';
 import { CheckoutRequestError, type CheckoutApi } from '../api/checkout-api';
 import { isEmbeddingAllowed, isParentOriginConfirmed } from '../domain/embedding';
 import { normalizePhoneNumber } from '../domain/phone';
 import type { CheckoutSession, Surface } from '../domain/session';
-import { outcomeMessageFor, type WidgetMessage } from '../messaging/contract';
+import { outcomeMessageFor } from '../messaging/contract';
 import type { CheckoutHost } from './checkout-host';
 import { initialState, reduce, retryPlan, type CheckoutEvent, type CheckoutState, type Effect } from './checkout-machine';
 
@@ -137,6 +138,15 @@ export class CheckoutController {
     void this.refresh();
   }
 
+  /**
+   * The browser showed the page again from its back/forward cache (for example after "Cancel and return", then
+   * Back): what is on screen is stale. Re-read the status through the acceptance gate before showing anything.
+   */
+  pageRestored(): void {
+    this.expiryChecked = false;
+    this.dispatch({ type: 'pageRestored' });
+  }
+
   isActive(): boolean {
     return ['phone', 'code', 'insufficientFunds'].includes(this.state.step);
   }
@@ -170,7 +180,7 @@ export class CheckoutController {
     return (
       parentOrigin !== null &&
       isEmbeddingAllowed(parentOrigin, session.embedding) &&
-      isParentOriginConfirmed(parentOrigin, observedParentOrigin, session.mode)
+      isParentOriginConfirmed(parentOrigin, observedParentOrigin)
     );
   }
 
@@ -198,9 +208,12 @@ export class CheckoutController {
     if (!session) return;
     const firstAcceptance = !this.verified;
     if (!(await this.acceptSession(session))) return;
-    if (firstAcceptance) this.phoneDraft = session.customerPhoneNumber ?? '';
+    if (firstAcceptance) {
+      this.phoneDraft = session.customerPhoneNumber ?? '';
+      // Before the first render of the session: every render may post a resize, and `ready` always comes first.
+      this.notify({ type: 'ready' });
+    }
     this.dispatch({ type: eventType, session, now: this.now() });
-    if (firstAcceptance) this.notify({ type: 'ready' });
   }
 
   private fail(error: unknown): void {

@@ -45,23 +45,22 @@ describe('isEmbeddingAllowed', () => {
 
 describe('isParentOriginConfirmed (S2: the announced origin must be the real parent)', () => {
   it('accepts the same origin', () => {
-    expect(isParentOriginConfirmed('https://shop.cg', 'https://shop.cg', 'LIVE')).toBe(true);
-    expect(isParentOriginConfirmed('https://shop.cg', 'https://shop.cg/', 'LIVE')).toBe(true);
+    expect(isParentOriginConfirmed('https://shop.cg', 'https://shop.cg')).toBe(true);
+    expect(isParentOriginConfirmed('https://shop.cg', 'https://shop.cg/')).toBe(true);
   });
 
-  it('refuses a forged origin, in LIVE and in TEST', () => {
-    expect(isParentOriginConfirmed('https://shop.cg', 'https://evil.example', 'LIVE')).toBe(false);
-    expect(isParentOriginConfirmed('https://shop.cg', 'https://evil.example', 'TEST')).toBe(false);
-    expect(isParentOriginConfirmed('https://shop.cg', 'http://shop.cg', 'LIVE')).toBe(false);
+  it('refuses an observed origin that differs from the announced one', () => {
+    expect(isParentOriginConfirmed('https://shop.cg', 'https://evil.example')).toBe(false);
+    expect(isParentOriginConfirmed('https://shop.cg', 'http://shop.cg')).toBe(false);
   });
 
-  it('refuses an unknown parent in LIVE, tolerates it in TEST', () => {
-    expect(isParentOriginConfirmed('https://shop.cg', null, 'LIVE')).toBe(false);
-    expect(isParentOriginConfirmed('https://shop.cg', null, 'TEST')).toBe(true);
+  it('leaves an unknown parent origin (no ancestorOrigins, no Referer) to the challenge, in TEST and LIVE', () => {
+    expect(isParentOriginConfirmed('https://shop.cg', null)).toBe(true);
   });
 
   it('refuses an opaque or malformed origin', () => {
-    expect(isParentOriginConfirmed('https://shop.cg', 'null', 'TEST')).toBe(false);
-    expect(isParentOriginConfirmed('nonsense', 'nonsense', 'LIVE')).toBe(false);
+    expect(isParentOriginConfirmed('https://shop.cg', 'null')).toBe(false);
+    expect(isParentOriginConfirmed('nonsense', 'nonsense')).toBe(false);
+    expect(isParentOriginConfirmed('nonsense', null)).toBe(false);
   });
 });

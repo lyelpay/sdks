@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CheckoutRequestError, type CheckoutApi } from '../api/checkout-api';
 import type { CheckoutSession, OtpProgress, Surface } from '../domain/session';
-import type { WidgetMessage } from '../messaging/contract';
+import type { WidgetMessage } from '@lyel/checkout-protocol';
 import { CheckoutController, type ControllerOptions } from './checkout-controller';
 import type { CheckoutHost } from './checkout-host';
 
@@ -157,7 +157,6 @@ describe('CheckoutController', () => {
   it.each([
     ['a domain outside the list', { parentOrigin: 'https://evil.example', observedParentOrigin: 'https://evil.example' }],
     ['a forged origin', { parentOrigin: 'https://shop.cg', observedParentOrigin: 'https://evil.example' }],
-    ['an unknown parent in LIVE', { parentOrigin: 'https://shop.cg', observedParentOrigin: null }],
   ])('sends nothing to the parent on %s', async (_label, origins) => {
     const api = fakeApi();
     api.readStatus.mockResolvedValue(session({ status: 'COMPLETED' }));
@@ -188,6 +187,42 @@ describe('CheckoutController', () => {
       await controller.confirm('000000');
       expect(confirmParent).toHaveBeenCalledTimes(1);
       expect(messages[0]).toEqual({ type: 'ready' });
+    });
+
+    it.each(['LIVE', 'TEST'] as const)(
+      'shows itself in %s when the browser hides the parent origin but the parent answers the challenge',
+      async (mode) => {
+        const api = fakeApi();
+        api.readStatus.mockResolvedValue(session({ mode }));
+        const { host, messages } = fakeHost();
+        const controller = controllerWith(api, host, { observedParentOrigin: null });
+        await controller.start();
+        expect(controller.snapshot.state.step).toBe('phone');
+        expect(messages).toEqual([{ type: 'ready' }]);
+      },
+    );
+
+    it('refuses an unknown parent origin when the parent does not answer the challenge', async () => {
+      const { host, messages } = fakeHost();
+      const controller = controllerWith(fakeApi(), host, {
+        observedParentOrigin: null,
+        confirmParent: () => Promise.resolve(false),
+      });
+      await controller.start();
+      expect(controller.snapshot.state.step).toBe('unavailable');
+      expect(messages).toEqual([]);
+    });
+
+    it('says ready before anything else, even when every render announces the height', async () => {
+      const { host, messages } = fakeHost();
+      const controller: CheckoutController = controllerWith(fakeApi(), host, {
+        onChange: () => {
+          controller.notify({ type: 'resize', height: 480 });
+        },
+      });
+      await controller.start();
+      expect(messages[0]).toEqual({ type: 'ready' });
+      expect(messages).toContainEqual({ type: 'resize', height: 480 });
     });
 
     it('never challenges a parent outside the allowed domains', async () => {
@@ -276,5 +311,57 @@ describe('CheckoutController', () => {
     await controller.confirm('000000');
     await vi.advanceTimersByTimeAsync(3000);
     expect(redirects).toEqual(['https://shop.cg/ok']);
+  });
+});
+
+describe('CheckoutController, page restored from the back/forward cache', () => {
+  it('re-reads the status through the acceptance gate and shows the real state', async () => {
+    const api = fakeApi();
+    const controller = controllerWith(api, fakeHost().host, {
+      surface: 'hosted',
+      parentOrigin: null,
+      observedParentOrigin: null,
+      expectedIntentId: 'pi_1',
+    });
+    await controller.start();
+    expect(controller.snapshot.state.step).toBe('phone');
+    api.readStatus.mockResolvedValue(session({ status: 'CANCELED' }));
+    controller.pageRestored();
+    expect(controller.snapshot.state.step).toBe('loading');
+    await vi.runOnlyPendingTimersAsync();
+    expect(api.readStatus).toHaveBeenCalledTimes(2);
+    expect(controller.snapshot.state.step).toBe('canceled');
+  });
+
+  it('still refuses a session that no longer passes the acceptance gate', async () => {
+    const api = fakeApi();
+    const controller = controllerWith(api, fakeHost().host, {
+      surface: 'hosted',
+      parentOrigin: null,
+      observedParentOrigin: null,
+      expectedIntentId: 'pi_1',
+    });
+    await controller.start();
+    api.readStatus.mockResolvedValue(session({ id: 'pi_other' }));
+    controller.pageRestored();
+    await vi.runOnlyPendingTimersAsync();
+    expect(controller.snapshot.state.step).toBe('unavailable');
+  });
+
+  it('does not leave the page again for a payment that was already made', async () => {
+    const api = fakeApi();
+    const { host, redirects } = fakeHost();
+    const controller = controllerWith(api, host, {
+      surface: 'hosted',
+      parentOrigin: null,
+      observedParentOrigin: null,
+      expectedIntentId: 'pi_1',
+    });
+    await controller.start();
+    api.readStatus.mockResolvedValue(session({ status: 'COMPLETED' }));
+    controller.pageRestored();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(controller.snapshot.state).toEqual({ step: 'success', alreadyPaid: true });
+    expect(redirects).toEqual([]);
   });
 });
