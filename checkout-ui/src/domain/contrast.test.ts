@@ -22,14 +22,16 @@ describe('contrastRatio', () => {
 });
 
 describe('buildTheme', () => {
-  it('keeps the Lyel Pay colours when the merchant set none', () => {
+  it('uses the Lyel Pay petrol with white text when the merchant set no colour', () => {
     const theme = buildTheme(null);
-    expect(theme.accent).toBe('#FE6A49');
-    expect(theme.onAccent).toBe('#08313A');
+    expect(theme.accent).toBe('#08313A');
+    expect(theme.onAccent).toBe('#FFFFFF');
+    expect(theme.link).toBe('#08313A');
+    expect(theme.focus).toBe('#08313A');
   });
 
-  it('falls back to Lyel Pay on an unreadable colour', () => {
-    expect(buildTheme('not-a-colour').accent).toBe('#FE6A49');
+  it('falls back to the Lyel Pay petrol on an unreadable colour', () => {
+    expect(buildTheme('not-a-colour').accent).toBe('#08313A');
   });
 
   it('writes white on green (4.2:1 reaches 3:1)', () => {
