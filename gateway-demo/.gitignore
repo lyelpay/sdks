@@ -1,0 +1,5 @@
+# Merchant keys live in .env.local: never commit them.
+.env*
+!.env.example
+node_modules/
+dist/
