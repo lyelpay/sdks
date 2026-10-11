@@ -19,3 +19,11 @@ function fromInternational(digits: string): string | null {
   }
   return INTERNATIONAL.test(digits) ? `+${digits}` : null;
 }
+
+const LEADING_CONGO_CODE = /^\s*\+?\s*242[\s.\-()]*/;
+
+/** The field already shows "+242" before the input: a Congolese number typed with its code shows without it. */
+export function phoneFieldValue(input: string): string {
+  if (!normalizePhoneNumber(input)?.startsWith(`+${CONGO_PREFIX}`)) return input;
+  return input.replace(LEADING_CONGO_CODE, '').trim();
+}

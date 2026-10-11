@@ -81,6 +81,7 @@ function controllerWith(
     parentOrigin: 'https://shop.cg',
     observedParentOrigin: 'https://shop.cg',
     expectedIntentId: null,
+    confirmParent: () => Promise.resolve(true),
     onChange: () => undefined,
     ...overrides,
   });
@@ -166,6 +167,53 @@ describe('CheckoutController', () => {
     controller.close();
     expect(controller.snapshot.state.step).toBe('unavailable');
     expect(messages).toEqual([]);
+  });
+
+  describe('parent handshake (S2)', () => {
+    it('says nothing to the parent and refuses to show itself when the parent does not answer the challenge', async () => {
+      const { host, messages } = fakeHost();
+      const controller = controllerWith(fakeApi(), host, { confirmParent: () => Promise.resolve(false) });
+      await controller.start();
+      controller.close();
+      expect(controller.snapshot.state.step).toBe('unavailable');
+      expect(messages).toEqual([]);
+    });
+
+    it('challenges the parent once, after the allowed-domain check, then says ready', async () => {
+      const api = fakeApi();
+      const { host, messages } = fakeHost();
+      const confirmParent = vi.fn(() => Promise.resolve(true));
+      const controller = controllerWith(api, host, { confirmParent });
+      await onCodeStep(controller);
+      await controller.confirm('000000');
+      expect(confirmParent).toHaveBeenCalledTimes(1);
+      expect(messages[0]).toEqual({ type: 'ready' });
+    });
+
+    it('never challenges a parent outside the allowed domains', async () => {
+      const confirmParent = vi.fn(() => Promise.resolve(true));
+      const controller = controllerWith(fakeApi(), fakeHost().host, {
+        parentOrigin: 'https://evil.example',
+        observedParentOrigin: 'https://evil.example',
+        confirmParent,
+      });
+      await controller.start();
+      expect(confirmParent).not.toHaveBeenCalled();
+    });
+
+    it('does not challenge anybody on the hosted page', async () => {
+      const confirmParent = vi.fn(() => Promise.resolve(false));
+      const controller = controllerWith(fakeApi(), fakeHost().host, {
+        surface: 'hosted',
+        parentOrigin: null,
+        observedParentOrigin: null,
+        expectedIntentId: 'pi_1',
+        confirmParent,
+      });
+      await controller.start();
+      expect(confirmParent).not.toHaveBeenCalled();
+      expect(controller.snapshot.state.step).toBe('phone');
+    });
   });
 
   it('refuses a hosted page whose path id is not the intent of the token', async () => {

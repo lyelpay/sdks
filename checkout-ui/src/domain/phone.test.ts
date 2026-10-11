@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePhoneNumber } from './phone';
+import { normalizePhoneNumber, phoneFieldValue } from './phone';
 
 describe('normalizePhoneNumber', () => {
   it.each([
@@ -34,4 +34,23 @@ describe('normalizePhoneNumber', () => {
   ])('refuses %s', (input) => {
     expect(normalizePhoneNumber(input)).toBeNull();
   });
+});
+
+describe('phoneFieldValue', () => {
+  it.each([
+    ['+242 06 123 45 67', '06 123 45 67'],
+    ['+242061234567', '061234567'],
+    ['242061234567', '061234567'],
+    ['242 06 123 45 67', '06 123 45 67'],
+    ['+242-06-123-45-67', '06-123-45-67'],
+  ])('drops the Congo code of %s, already shown before the field', (input, shown) => {
+    expect(phoneFieldValue(input)).toBe(shown);
+  });
+
+  it.each(['06 123 45 67', '061234567', '+237 600 000 002', '', '242', '+242 6 123', 'abc'])(
+    'keeps %s as typed',
+    (input) => {
+      expect(phoneFieldValue(input)).toBe(input);
+    },
+  );
 });
