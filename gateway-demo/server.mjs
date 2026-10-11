@@ -28,6 +28,8 @@ function loadEnv(file) {
 
 loadEnv(join(here, '.env.local'));
 const PORT = Number(process.env.PORT || 4310);
+/** Loopback only: the demo holds a secret test key and must not be reachable from the local network. */
+const HOST = '127.0.0.1';
 const SHOP_URL = `http://localhost:${PORT}`;
 const { LYEL_API_URL, LYEL_TEST_SECRET_KEY, LYEL_TEST_PUBLISHABLE_KEY } = process.env;
 const CHECKOUT_URL = new URL(process.env.LYEL_CHECKOUT_URL || 'https://dev.checkout.lyelpay.com').origin;
@@ -176,7 +178,7 @@ createServer(async (req, res) => {
   } catch (error) {
     send(res, 500, { message: error instanceof Error ? error.message : 'Erreur' });
   }
-}).listen(PORT, () => {
+}).listen(PORT, HOST, () => {
   console.log(`Boutique de test : ${SHOP_URL}  (API : ${LYEL_API_URL}, widget : ${CHECKOUT_URL}, mode TEST)`);
 });
 
