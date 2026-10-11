@@ -3,8 +3,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  // The v0 client (LyelPay, loadLyelPay) targets the retired /intention API and is linted out until it is removed.
-  { ignores: ['dist', 'node_modules', 'examples', 'src/sdk.ts', 'src/loadLyelPay.ts', 'src/global.ts', 'src/types.ts', 'src/shared.ts', 'src/constants.ts'] },
+  { ignores: ['dist', 'node_modules'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

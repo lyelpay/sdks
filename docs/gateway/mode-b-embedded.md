@@ -25,7 +25,7 @@ const checkout = new GatewayCheckout({
   onSuccess: ({ reference }) => goToConfirmationPage(reference), // which then checks on your server
   onFailed: () => showHelp(),
 });
-checkout.mount(document.getElementById('lyel-pay')!, { framed: true });
+checkout.mount(document.getElementById('lyel-pay'), { framed: true }); // throws if the element is missing
 // checkout.destroy() removes it, for example when the customer leaves the step.
 ```
 

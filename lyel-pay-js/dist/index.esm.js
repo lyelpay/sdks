@@ -1,477 +1,56 @@
-function getDefaultExportFromCjs (x) {
-	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
+/**
+ * The `lyel-pay-checkout` postMessage protocol, v1, between the checkout widget (in its iframe) and the browser SDK
+ * (in the merchant page). Every message carries `{ source, version }`; anything else is ignored.
+ * None of the messages proves a payment: the merchant confirms with the webhook or a server-side read.
+ */
+const WIDGET_MESSAGE_SOURCE = 'lyel-pay-checkout';
+const SDK_MESSAGE_SOURCE = 'lyel-pay-js';
+const PROTOCOL_VERSION = 1;
+function isFields(value) {
+    return typeof value === 'object' && value !== null;
 }
 
-var eventemitter3 = {exports: {}};
-
-(function (module) {
-
-	var has = Object.prototype.hasOwnProperty
-	  , prefix = '~';
-
-	/**
-	 * Constructor to create a storage for our `EE` objects.
-	 * An `Events` instance is a plain object whose properties are event names.
-	 *
-	 * @constructor
-	 * @private
-	 */
-	function Events() {}
-
-	//
-	// We try to not inherit from `Object.prototype`. In some engines creating an
-	// instance in this way is faster than calling `Object.create(null)` directly.
-	// If `Object.create(null)` is not supported we prefix the event names with a
-	// character to make sure that the built-in object properties are not
-	// overridden or used as an attack vector.
-	//
-	if (Object.create) {
-	  Events.prototype = Object.create(null);
-
-	  //
-	  // This hack is needed because the `__proto__` property is still inherited in
-	  // some old browsers like Android 4, iPhone 5.1, Opera 11 and Safari 5.
-	  //
-	  if (!new Events().__proto__) prefix = false;
-	}
-
-	/**
-	 * Representation of a single event listener.
-	 *
-	 * @param {Function} fn The listener function.
-	 * @param {*} context The context to invoke the listener with.
-	 * @param {Boolean} [once=false] Specify if the listener is a one-time listener.
-	 * @constructor
-	 * @private
-	 */
-	function EE(fn, context, once) {
-	  this.fn = fn;
-	  this.context = context;
-	  this.once = once || false;
-	}
-
-	/**
-	 * Add a listener for a given event.
-	 *
-	 * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
-	 * @param {(String|Symbol)} event The event name.
-	 * @param {Function} fn The listener function.
-	 * @param {*} context The context to invoke the listener with.
-	 * @param {Boolean} once Specify if the listener is a one-time listener.
-	 * @returns {EventEmitter}
-	 * @private
-	 */
-	function addListener(emitter, event, fn, context, once) {
-	  if (typeof fn !== 'function') {
-	    throw new TypeError('The listener must be a function');
-	  }
-
-	  var listener = new EE(fn, context || emitter, once)
-	    , evt = prefix ? prefix + event : event;
-
-	  if (!emitter._events[evt]) emitter._events[evt] = listener, emitter._eventsCount++;
-	  else if (!emitter._events[evt].fn) emitter._events[evt].push(listener);
-	  else emitter._events[evt] = [emitter._events[evt], listener];
-
-	  return emitter;
-	}
-
-	/**
-	 * Clear event by name.
-	 *
-	 * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
-	 * @param {(String|Symbol)} evt The Event name.
-	 * @private
-	 */
-	function clearEvent(emitter, evt) {
-	  if (--emitter._eventsCount === 0) emitter._events = new Events();
-	  else delete emitter._events[evt];
-	}
-
-	/**
-	 * Minimal `EventEmitter` interface that is molded against the Node.js
-	 * `EventEmitter` interface.
-	 *
-	 * @constructor
-	 * @public
-	 */
-	function EventEmitter() {
-	  this._events = new Events();
-	  this._eventsCount = 0;
-	}
-
-	/**
-	 * Return an array listing the events for which the emitter has registered
-	 * listeners.
-	 *
-	 * @returns {Array}
-	 * @public
-	 */
-	EventEmitter.prototype.eventNames = function eventNames() {
-	  var names = []
-	    , events
-	    , name;
-
-	  if (this._eventsCount === 0) return names;
-
-	  for (name in (events = this._events)) {
-	    if (has.call(events, name)) names.push(prefix ? name.slice(1) : name);
-	  }
-
-	  if (Object.getOwnPropertySymbols) {
-	    return names.concat(Object.getOwnPropertySymbols(events));
-	  }
-
-	  return names;
-	};
-
-	/**
-	 * Return the listeners registered for a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @returns {Array} The registered listeners.
-	 * @public
-	 */
-	EventEmitter.prototype.listeners = function listeners(event) {
-	  var evt = prefix ? prefix + event : event
-	    , handlers = this._events[evt];
-
-	  if (!handlers) return [];
-	  if (handlers.fn) return [handlers.fn];
-
-	  for (var i = 0, l = handlers.length, ee = new Array(l); i < l; i++) {
-	    ee[i] = handlers[i].fn;
-	  }
-
-	  return ee;
-	};
-
-	/**
-	 * Return the number of listeners listening to a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @returns {Number} The number of listeners.
-	 * @public
-	 */
-	EventEmitter.prototype.listenerCount = function listenerCount(event) {
-	  var evt = prefix ? prefix + event : event
-	    , listeners = this._events[evt];
-
-	  if (!listeners) return 0;
-	  if (listeners.fn) return 1;
-	  return listeners.length;
-	};
-
-	/**
-	 * Calls each of the listeners registered for a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @returns {Boolean} `true` if the event had listeners, else `false`.
-	 * @public
-	 */
-	EventEmitter.prototype.emit = function emit(event, a1, a2, a3, a4, a5) {
-	  var evt = prefix ? prefix + event : event;
-
-	  if (!this._events[evt]) return false;
-
-	  var listeners = this._events[evt]
-	    , len = arguments.length
-	    , args
-	    , i;
-
-	  if (listeners.fn) {
-	    if (listeners.once) this.removeListener(event, listeners.fn, undefined, true);
-
-	    switch (len) {
-	      case 1: return listeners.fn.call(listeners.context), true;
-	      case 2: return listeners.fn.call(listeners.context, a1), true;
-	      case 3: return listeners.fn.call(listeners.context, a1, a2), true;
-	      case 4: return listeners.fn.call(listeners.context, a1, a2, a3), true;
-	      case 5: return listeners.fn.call(listeners.context, a1, a2, a3, a4), true;
-	      case 6: return listeners.fn.call(listeners.context, a1, a2, a3, a4, a5), true;
-	    }
-
-	    for (i = 1, args = new Array(len -1); i < len; i++) {
-	      args[i - 1] = arguments[i];
-	    }
-
-	    listeners.fn.apply(listeners.context, args);
-	  } else {
-	    var length = listeners.length
-	      , j;
-
-	    for (i = 0; i < length; i++) {
-	      if (listeners[i].once) this.removeListener(event, listeners[i].fn, undefined, true);
-
-	      switch (len) {
-	        case 1: listeners[i].fn.call(listeners[i].context); break;
-	        case 2: listeners[i].fn.call(listeners[i].context, a1); break;
-	        case 3: listeners[i].fn.call(listeners[i].context, a1, a2); break;
-	        case 4: listeners[i].fn.call(listeners[i].context, a1, a2, a3); break;
-	        default:
-	          if (!args) for (j = 1, args = new Array(len -1); j < len; j++) {
-	            args[j - 1] = arguments[j];
-	          }
-
-	          listeners[i].fn.apply(listeners[i].context, args);
-	      }
-	    }
-	  }
-
-	  return true;
-	};
-
-	/**
-	 * Add a listener for a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @param {Function} fn The listener function.
-	 * @param {*} [context=this] The context to invoke the listener with.
-	 * @returns {EventEmitter} `this`.
-	 * @public
-	 */
-	EventEmitter.prototype.on = function on(event, fn, context) {
-	  return addListener(this, event, fn, context, false);
-	};
-
-	/**
-	 * Add a one-time listener for a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @param {Function} fn The listener function.
-	 * @param {*} [context=this] The context to invoke the listener with.
-	 * @returns {EventEmitter} `this`.
-	 * @public
-	 */
-	EventEmitter.prototype.once = function once(event, fn, context) {
-	  return addListener(this, event, fn, context, true);
-	};
-
-	/**
-	 * Remove the listeners of a given event.
-	 *
-	 * @param {(String|Symbol)} event The event name.
-	 * @param {Function} fn Only remove the listeners that match this function.
-	 * @param {*} context Only remove the listeners that have this context.
-	 * @param {Boolean} once Only remove one-time listeners.
-	 * @returns {EventEmitter} `this`.
-	 * @public
-	 */
-	EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once) {
-	  var evt = prefix ? prefix + event : event;
-
-	  if (!this._events[evt]) return this;
-	  if (!fn) {
-	    clearEvent(this, evt);
-	    return this;
-	  }
-
-	  var listeners = this._events[evt];
-
-	  if (listeners.fn) {
-	    if (
-	      listeners.fn === fn &&
-	      (!once || listeners.once) &&
-	      (!context || listeners.context === context)
-	    ) {
-	      clearEvent(this, evt);
-	    }
-	  } else {
-	    for (var i = 0, events = [], length = listeners.length; i < length; i++) {
-	      if (
-	        listeners[i].fn !== fn ||
-	        (once && !listeners[i].once) ||
-	        (context && listeners[i].context !== context)
-	      ) {
-	        events.push(listeners[i]);
-	      }
-	    }
-
-	    //
-	    // Reset the array, or remove it completely if we have no more listeners.
-	    //
-	    if (events.length) this._events[evt] = events.length === 1 ? events[0] : events;
-	    else clearEvent(this, evt);
-	  }
-
-	  return this;
-	};
-
-	/**
-	 * Remove all listeners, or those of the specified event.
-	 *
-	 * @param {(String|Symbol)} [event] The event name.
-	 * @returns {EventEmitter} `this`.
-	 * @public
-	 */
-	EventEmitter.prototype.removeAllListeners = function removeAllListeners(event) {
-	  var evt;
-
-	  if (event) {
-	    evt = prefix ? prefix + event : event;
-	    if (this._events[evt]) clearEvent(this, evt);
-	  } else {
-	    this._events = new Events();
-	    this._eventsCount = 0;
-	  }
-
-	  return this;
-	};
-
-	//
-	// Alias methods names because people roll like that.
-	//
-	EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
-	EventEmitter.prototype.addListener = EventEmitter.prototype.on;
-
-	//
-	// Expose the prefix.
-	//
-	EventEmitter.prefixed = prefix;
-
-	//
-	// Allow `EventEmitter` to be imported as module namespace.
-	//
-	EventEmitter.EventEmitter = EventEmitter;
-
-	//
-	// Expose the module.
-	//
-	{
-	  module.exports = EventEmitter;
-	} 
-} (eventemitter3));
-
-var eventemitter3Exports = eventemitter3.exports;
-var EventEmitter = /*@__PURE__*/getDefaultExportFromCjs(eventemitter3Exports);
-
-const SANDBOX_BASE_URL = 'https://sandbox.lyelpay.com';
-const PROD_BASE_URL = 'https://api.lyelpay.com';
-
-class LyelPay extends EventEmitter {
-    constructor(options) {
-        super();
-        this.token = null;
-        this.apiKey = options.apiKey;
-        this.env = options.env || 'sandbox';
-        this.baseUrl = this.env === 'production'
-            ? PROD_BASE_URL
-            : SANDBOX_BASE_URL;
-    }
-    async createIntention(operation, data) {
-        try {
-            const res = await fetch(`${this.baseUrl}/intention/${operation}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': this.apiKey,
-                },
-                body: JSON.stringify(data),
-            });
-            const result = await res.json();
-            if (!res.ok)
-                throw new Error(result.message || 'Intention creation failed');
-            return result;
+function text(fields, key) {
+    const value = fields[key];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+}
+function readMessage(fields) {
+    const paymentIntentId = text(fields, 'paymentIntentId');
+    switch (fields['type']) {
+        case 'challenge': {
+            const nonce = text(fields, 'nonce');
+            return nonce ? { type: 'challenge', nonce } : null;
         }
-        catch (err) {
-            this.emit('error', err);
-            throw err;
+        case 'ready':
+            return { type: 'ready' };
+        case 'close':
+            return { type: 'close' };
+        case 'resize': {
+            const height = fields['height'];
+            return typeof height === 'number' && Number.isFinite(height) && height >= 0 ? { type: 'resize', height } : null;
         }
-    }
-    async initOtp(params) {
-        try {
-            const res = await fetch(`${this.baseUrl}/auth/otp/init`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': this.apiKey,
-                },
-                body: JSON.stringify(params),
-            });
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.message || 'OTP init failed');
-            }
+        case 'success': {
+            const reference = text(fields, 'reference');
+            return paymentIntentId && reference ? { type: 'success', paymentIntentId, reference } : null;
         }
-        catch (err) {
-            this.emit('error', err);
-            throw err;
-        }
-    }
-    async verifyOtp(params) {
-        try {
-            const res = await fetch(`${this.baseUrl}/auth/otp/verify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': this.apiKey,
-                },
-                body: JSON.stringify(params),
-            });
-            const data = await res.json();
-            if (!res.ok)
-                throw new Error(data.message || 'OTP verification failed');
-            this.token = data.token;
-        }
-        catch (err) {
-            this.emit('error', err);
-            throw err;
-        }
-    }
-    async charge(params) {
-        try {
-            const res = await fetch(`${this.baseUrl}/payment/charge`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.token}`,
-                    'x-api-key': this.apiKey,
-                },
-                body: JSON.stringify(params),
-            });
-            const data = await res.json();
-            if (!res.ok)
-                throw new Error(data.message || 'Charge failed');
-            return data;
-        }
-        catch (err) {
-            this.emit('error', err);
-            throw err;
-        }
-    }
-    getToken() {
-        return this.token;
+        case 'failed':
+        case 'expired':
+        case 'canceled':
+            return paymentIntentId ? { type: fields['type'], paymentIntentId } : null;
+        default:
+            return null;
     }
 }
+/** A widget message, or null for anything else (other senders, the v0 protocol, malformed payloads). */
+function parseWidgetMessage(data) {
+    if (!isFields(data) || data['source'] !== WIDGET_MESSAGE_SOURCE || data['version'] !== PROTOCOL_VERSION)
+        return null;
+    return readMessage(data);
+}
 
-const getLyelGlobal = () => {
-    if (typeof window === 'undefined')
-        return {};
-    window.__LYEL__PAY__ = window.__LYEL__PAY__ || {};
-    return window.__LYEL__PAY__;
-};
-const setLyelInstance = (instance) => {
-    const global = getLyelGlobal();
-    global._lyelPayInstance = instance;
-};
-
-const loadLyelPay = (options) => {
-    const global = getLyelGlobal();
-    if (global._lyelPayInstance) {
-        return global._lyelPayInstance;
-    }
-    const instance = new LyelPay(options);
-    setLyelInstance(instance);
-    return instance;
-};
-
-var OPERATION_TYPE_ENDPOINTS;
-(function (OPERATION_TYPE_ENDPOINTS) {
-    OPERATION_TYPE_ENDPOINTS["DEPOSIT"] = "deposit";
-    OPERATION_TYPE_ENDPOINTS["WITHDRAW"] = "withdraw";
-    OPERATION_TYPE_ENDPOINTS["PAYMENT"] = "payment";
-    OPERATION_TYPE_ENDPOINTS["TRANSFER"] = "transfer";
-})(OPERATION_TYPE_ENDPOINTS || (OPERATION_TYPE_ENDPOINTS = {}));
+function challengeResponse(nonce) {
+    return { source: SDK_MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'challenge-response', nonce };
+}
 
 const MODAL_LAYER = '2147483000';
 /** Shows the loading skeleton until the widget announces its real height. */
@@ -540,64 +119,42 @@ function buildLaunchUrl(params) {
 }
 
 /**
- * The `lyel-pay-checkout` postMessage protocol, v1. The widget (checkout-ui, `src/messaging/contract.ts`) is the
- * source of truth: widget messages are `{ source: 'lyel-pay-checkout', version: 1, type, ...payload }`.
- * None of them proves a payment: confirm it with the `payment.completed` webhook or a server-side read.
+ * Mode A takes the page over: no scroll behind the modal, and the keyboard focus goes into the checkout.
+ * The returned function gives both back, focus to the element that opened the checkout.
  */
-const WIDGET_MESSAGE_SOURCE = 'lyel-pay-checkout';
-const SDK_MESSAGE_SOURCE = 'lyel-pay-js';
-const PROTOCOL_VERSION = 1;
-function isFields(value) {
-    return typeof value === 'object' && value !== null;
-}
-function text(fields, key) {
-    const value = fields[key];
-    return typeof value === 'string' && value.length > 0 ? value : null;
-}
-function readMessage(fields) {
-    const paymentIntentId = text(fields, 'paymentIntentId');
-    switch (fields['type']) {
-        case 'challenge': {
-            const nonce = text(fields, 'nonce');
-            return nonce ? { type: 'challenge', nonce } : null;
-        }
-        case 'ready':
-            return { type: 'ready' };
-        case 'close':
-            return { type: 'close' };
-        case 'resize': {
-            const height = fields['height'];
-            return typeof height === 'number' && Number.isFinite(height) && height >= 0 ? { type: 'resize', height } : null;
-        }
-        case 'success': {
-            const reference = text(fields, 'reference');
-            return paymentIntentId && reference ? { type: 'success', paymentIntentId, reference } : null;
-        }
-        case 'failed':
-        case 'expired':
-        case 'canceled':
-            return paymentIntentId ? { type: fields['type'], paymentIntentId } : null;
-        default:
-            return null;
-    }
-}
-/** A widget message, or null for anything else (other senders, v0 protocol, malformed payloads). */
-function parseWidgetMessage(data) {
-    if (!isFields(data) || data['source'] !== WIDGET_MESSAGE_SOURCE || data['version'] !== PROTOCOL_VERSION)
-        return null;
-    return readMessage(data);
-}
-function challengeResponse(nonce) {
-    return { source: SDK_MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'challenge-response', nonce };
-}
-
-function lockPageScroll() {
-    const previous = document.body.style.overflow;
+function takeOverPage() {
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement;
     document.body.style.overflow = 'hidden';
     return () => {
-        document.body.style.overflow = previous;
+        document.body.style.overflow = previousOverflow;
+        if (previousFocus instanceof HTMLElement)
+            previousFocus.focus();
     };
 }
+
+const PUBLISHABLE_KEY = /^pk_(test|live)_.+$/;
+/** Fails fast on a misconfigured integration, before anything is added to the page. */
+function assertValidOptions(options) {
+    if (!PUBLISHABLE_KEY.test(options.publishableKey)) {
+        throw new Error('Lyel Pay: publishableKey must start with pk_test_ or pk_live_ (never use your secret key here)');
+    }
+    if (options.sessionToken.trim() === '') {
+        throw new Error('Lyel Pay: sessionToken is empty; pass the sessionToken your server received with the intent');
+    }
+}
+/** `mount(document.getElementById(...))` with a wrong id passes null: say so instead of failing later. */
+function assertMountTarget(container) {
+    if (!(container instanceof HTMLElement)) {
+        throw new Error('Lyel Pay: mount() needs an element of the page; the container is missing');
+    }
+}
+
+/**
+ * How long the checkout has to say `ready`: its 5 s parent challenge, plus the iframe load and the status read on a
+ * slow mobile network (the same 30 s budget as the Lyel Pay app).
+ */
+const READY_TIMEOUT_MS = 30000;
 /**
  * Shows the Lyel Pay checkout in the merchant page: `open()` for the modal (mode A), `mount()` for the embedded
  * block (mode B). The hosted page (mode C) needs no SDK: redirect to the `checkoutUrl` your server received.
@@ -607,6 +164,7 @@ class GatewayCheckout {
         var _a;
         this.options = options;
         this.current = null;
+        assertValidOptions(options);
         this.checkoutUrl = (_a = options.checkoutUrl) !== null && _a !== void 0 ? _a : DEFAULT_CHECKOUT_URL;
         this.checkoutOrigin = checkoutOriginOf(this.checkoutUrl);
     }
@@ -615,10 +173,14 @@ class GatewayCheckout {
         if (this.current)
             return;
         const iframe = createModalFrame(this.launchUrl('modal'));
-        this.show(iframe, 'modal', document.body, lockPageScroll());
+        iframe.addEventListener('load', () => {
+            iframe.focus();
+        });
+        this.show(iframe, 'modal', document.body, takeOverPage());
     }
-    /** Mode B: a block inside `container`, as wide as it and as tall as its content. */
+    /** Mode B: a block inside `container`, as wide as it and as tall as its content. Throws on a missing container. */
     mount(container, mountOptions = {}) {
+        assertMountTarget(container);
         if (this.current)
             return;
         const iframe = createEmbeddedFrame(this.launchUrl('embedded', mountOptions.framed));
@@ -638,6 +200,7 @@ class GatewayCheckout {
         if (!current)
             return;
         this.current = null;
+        clearTimeout(current.readyDeadline);
         current.stopListening();
         current.restorePage();
         current.iframe.remove();
@@ -664,11 +227,20 @@ class GatewayCheckout {
             iframe,
             surface,
             restorePage,
+            readyDeadline: setTimeout(() => {
+                this.giveUp();
+            }, READY_TIMEOUT_MS),
             stopListening: () => {
                 window.removeEventListener('message', listener);
             },
         };
         parent.appendChild(iframe);
+    }
+    /** A refused domain or a failed handshake leaves the widget silent: never leave the page stuck behind it. */
+    giveUp() {
+        var _a, _b;
+        this.destroy();
+        (_b = (_a = this.options).onError) === null || _b === void 0 ? void 0 : _b.call(_a, { code: 'checkout_unavailable' });
     }
     /** S2: only the checkout origin, and only our own iframe, may talk to the SDK. */
     receive(event) {
@@ -687,6 +259,7 @@ class GatewayCheckout {
                 widget.postMessage(challengeResponse(message.nonce), this.checkoutOrigin);
                 return;
             case 'ready':
+                clearTimeout(current.readyDeadline);
                 (_b = (_a = this.options).onReady) === null || _b === void 0 ? void 0 : _b.call(_a);
                 return;
             case 'resize':
@@ -713,5 +286,5 @@ class GatewayCheckout {
     }
 }
 
-export { DEFAULT_CHECKOUT_URL, GatewayCheckout, OPERATION_TYPE_ENDPOINTS, loadLyelPay };
+export { DEFAULT_CHECKOUT_URL, GatewayCheckout };
 //# sourceMappingURL=index.esm.js.map

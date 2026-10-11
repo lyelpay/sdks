@@ -6,6 +6,7 @@ import { CHECKOUT, checkoutFrame, fromWidget, launchParams } from './test/widget
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('LyelPayCheckout (mode B)', () => {
@@ -42,6 +43,15 @@ describe('LyelPayCheckout (mode B)', () => {
     expect(onReady).toHaveBeenCalledTimes(1);
     expect(checkoutFrame()?.style.height).toBe('480px');
     expect(onFailed).toHaveBeenCalledWith({ paymentIntentId: 'pi_1' });
+  });
+
+  it('reports a checkout that never gets ready, and removes the block', () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    render(<LyelPayCheckout publishableKey="pk_test_abc" sessionToken="st_1" checkoutUrl={CHECKOUT} onError={onError} />);
+    vi.advanceTimersByTime(30_000);
+    expect(onError).toHaveBeenCalledExactlyOnceWith({ code: 'checkout_unavailable' });
+    expect(checkoutFrame()).toBeNull();
   });
 
   it('mounts a new block for a new session and keeps a single one', () => {

@@ -18,6 +18,7 @@ export function useStableCallbacks(callbacks: GatewayCheckoutCallbacks): Require
       onExpired: (outcome): void => latest.current.onExpired?.(outcome),
       onCanceled: (outcome): void => latest.current.onCanceled?.(outcome),
       onClose: (): void => latest.current.onClose?.(),
+      onError: (error): void => latest.current.onError?.(error),
     }),
     [],
   );

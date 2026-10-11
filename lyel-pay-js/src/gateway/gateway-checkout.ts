@@ -1,21 +1,22 @@
+import { challengeResponse, parseWidgetMessage, type WidgetMessage } from '@lyel/checkout-protocol';
 import { createEmbeddedFrame, createModalFrame } from './frames';
 import { buildLaunchUrl, checkoutOriginOf, DEFAULT_CHECKOUT_URL, type EmbedSurface } from './launch-url';
-import { challengeResponse, parseWidgetMessage, type WidgetMessage } from './protocol';
+import { takeOverPage } from './page-takeover';
 import type { GatewayCheckoutOptions, MountOptions } from './types';
+import { assertMountTarget, assertValidOptions } from './validate-options';
+
+/**
+ * How long the checkout has to say `ready`: its 5 s parent challenge, plus the iframe load and the status read on a
+ * slow mobile network (the same 30 s budget as the Lyel Pay app).
+ */
+export const READY_TIMEOUT_MS = 30_000;
 
 interface OpenCheckout {
   iframe: HTMLIFrameElement;
   surface: EmbedSurface;
+  readyDeadline: ReturnType<typeof setTimeout>;
   stopListening: () => void;
   restorePage: () => void;
-}
-
-function lockPageScroll(): () => void {
-  const previous = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
-  return () => {
-    document.body.style.overflow = previous;
-  };
 }
 
 /**
@@ -28,6 +29,7 @@ export class GatewayCheckout {
   private current: OpenCheckout | null = null;
 
   constructor(private readonly options: GatewayCheckoutOptions) {
+    assertValidOptions(options);
     this.checkoutUrl = options.checkoutUrl ?? DEFAULT_CHECKOUT_URL;
     this.checkoutOrigin = checkoutOriginOf(this.checkoutUrl);
   }
@@ -36,11 +38,15 @@ export class GatewayCheckout {
   open(): void {
     if (this.current) return;
     const iframe = createModalFrame(this.launchUrl('modal'));
-    this.show(iframe, 'modal', document.body, lockPageScroll());
+    iframe.addEventListener('load', () => {
+      iframe.focus();
+    });
+    this.show(iframe, 'modal', document.body, takeOverPage());
   }
 
-  /** Mode B: a block inside `container`, as wide as it and as tall as its content. */
-  mount(container: HTMLElement, mountOptions: MountOptions = {}): void {
+  /** Mode B: a block inside `container`, as wide as it and as tall as its content. Throws on a missing container. */
+  mount(container: HTMLElement | null, mountOptions: MountOptions = {}): void {
+    assertMountTarget(container);
     if (this.current) return;
     const iframe = createEmbeddedFrame(this.launchUrl('embedded', mountOptions.framed));
     this.show(iframe, 'embedded', container, () => undefined);
@@ -58,6 +64,7 @@ export class GatewayCheckout {
     const current = this.current;
     if (!current) return;
     this.current = null;
+    clearTimeout(current.readyDeadline);
     current.stopListening();
     current.restorePage();
     current.iframe.remove();
@@ -86,11 +93,20 @@ export class GatewayCheckout {
       iframe,
       surface,
       restorePage,
+      readyDeadline: setTimeout(() => {
+        this.giveUp();
+      }, READY_TIMEOUT_MS),
       stopListening: (): void => {
         window.removeEventListener('message', listener);
       },
     };
     parent.appendChild(iframe);
+  }
+
+  /** A refused domain or a failed handshake leaves the widget silent: never leave the page stuck behind it. */
+  private giveUp(): void {
+    this.destroy();
+    this.options.onError?.({ code: 'checkout_unavailable' });
   }
 
   /** S2: only the checkout origin, and only our own iframe, may talk to the SDK. */
@@ -108,6 +124,7 @@ export class GatewayCheckout {
         widget.postMessage(challengeResponse(message.nonce), this.checkoutOrigin);
         return;
       case 'ready':
+        clearTimeout(current.readyDeadline);
         this.options.onReady?.();
         return;
       case 'resize':

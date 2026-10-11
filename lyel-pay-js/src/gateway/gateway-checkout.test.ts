@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GatewayCheckout } from './gateway-checkout';
+import { challengeResponse, widgetEnvelope, type WidgetMessage } from '@lyel/checkout-protocol';
+import { GatewayCheckout, READY_TIMEOUT_MS } from './gateway-checkout';
 import type { GatewayCheckoutOptions } from './types';
-import { SDK_MESSAGE_SOURCE, WIDGET_MESSAGE_SOURCE } from './protocol';
 
 const CHECKOUT = 'https://dev.checkout.lyelpay.com';
 
@@ -22,17 +22,24 @@ function widgetWindow(): Window {
   return win;
 }
 
-function fromWidget(data: Record<string, unknown>, init: { origin?: string; source?: Window } = {}): void {
+function fromWidget(message: WidgetMessage, init: { origin?: string; source?: Window } = {}): void {
   window.dispatchEvent(
     new MessageEvent('message', {
-      data: { source: WIDGET_MESSAGE_SOURCE, version: 1, ...data },
+      data: widgetEnvelope(message),
       origin: init.origin ?? CHECKOUT,
       source: init.source ?? widgetWindow(),
     }),
   );
 }
 
+function container(): HTMLElement {
+  const element = document.createElement('div');
+  document.body.appendChild(element);
+  return element;
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = '';
   document.body.style.overflow = '';
 });
@@ -87,12 +94,6 @@ describe('GatewayCheckout, mode A (modal)', () => {
 });
 
 describe('GatewayCheckout, mode B (embedded block)', () => {
-  function container(): HTMLElement {
-    const element = document.createElement('div');
-    document.body.appendChild(element);
-    return element;
-  }
-
   it('mounts a block inside the merchant element, framed by default', () => {
     const target = container();
     new GatewayCheckout(options()).mount(target);
@@ -163,7 +164,7 @@ describe('GatewayCheckout, S2', () => {
     const postMessage = vi.spyOn(widgetWindow(), 'postMessage').mockImplementation(() => undefined);
     fromWidget({ type: 'challenge', nonce: 'n-1' });
     expect(postMessage).toHaveBeenCalledWith(
-      { source: SDK_MESSAGE_SOURCE, version: 1, type: 'challenge-response', nonce: 'n-1' },
+      challengeResponse('n-1'),
       CHECKOUT,
     );
   });
@@ -176,12 +177,113 @@ describe('GatewayCheckout, S2', () => {
   });
 
   it('never sends the amount nor the merchant name to the widget (S9)', () => {
-    new GatewayCheckout({ ...options(), amount: '1', merchantName: 'Fake' }).open();
+    new GatewayCheckout(options({ amount: '1', merchantName: 'Fake' })).open();
     const hash = new URLSearchParams(new URL(frame().src).hash.slice(1));
     expect([...hash.keys()].sort()).toEqual(['mode', 'origin', 'pk', 'st']);
   });
 
   it('refuses an invalid checkout address at once', () => {
     expect(() => new GatewayCheckout(options({ checkoutUrl: 'not a url' }))).toThrow(/checkoutUrl/);
+  });
+});
+
+describe('GatewayCheckout, the checkout never answers', () => {
+  it.each([
+    ['modal', (checkout: GatewayCheckout): void => {
+      checkout.open();
+    }],
+    ['embedded block', (checkout: GatewayCheckout): void => {
+      checkout.mount(container());
+    }],
+  ])('removes the %s and reports checkout_unavailable when ready never comes', (_label, show) => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const onClose = vi.fn();
+    show(new GatewayCheckout(options({ onError, onClose })));
+    vi.advanceTimersByTime(READY_TIMEOUT_MS - 1);
+    expect(onError).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(document.body.style.overflow).toBe('');
+    expect(onError).toHaveBeenCalledExactlyOnceWith({ code: 'checkout_unavailable' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('waits longer than the 5 s widget challenge', () => {
+    expect(READY_TIMEOUT_MS).toBeGreaterThan(5000);
+  });
+
+  it('keeps the checkout once ready arrived in time', () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    new GatewayCheckout(options({ onError })).open();
+    fromWidget({ type: 'ready' });
+    vi.advanceTimersByTime(READY_TIMEOUT_MS * 2);
+    expect(document.querySelector('iframe')).not.toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('forgets the deadline when the merchant removes the checkout first', () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const checkout = new GatewayCheckout(options({ onError }));
+    checkout.open();
+    checkout.destroy();
+    vi.advanceTimersByTime(READY_TIMEOUT_MS);
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('GatewayCheckout, focus (modal)', () => {
+  function pageButton(): HTMLButtonElement {
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+    return button;
+  }
+
+  it('moves the focus into the checkout once its iframe has loaded', () => {
+    pageButton();
+    new GatewayCheckout(options()).open();
+    frame().dispatchEvent(new Event('load'));
+    expect(document.activeElement).toBe(frame());
+  });
+
+  it('gives the focus back to the element that opened the checkout', () => {
+    const button = pageButton();
+    const checkout = new GatewayCheckout(options());
+    checkout.open();
+    frame().dispatchEvent(new Event('load'));
+    checkout.close();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('leaves the focus on the merchant page for an embedded block', () => {
+    const button = pageButton();
+    new GatewayCheckout(options()).mount(container());
+    frame().dispatchEvent(new Event('load'));
+    expect(document.activeElement).toBe(button);
+  });
+});
+
+describe('GatewayCheckout, options', () => {
+  it.each(['', 'sk_test_abc', 'pk_abc', 'pk_test_', 'PK_TEST_abc'])('refuses the publishable key %j', (publishableKey) => {
+    expect(() => new GatewayCheckout(options({ publishableKey }))).toThrow(/publishableKey/);
+  });
+
+  it.each(['pk_test_abc', 'pk_live_abc'])('accepts the publishable key %j', (publishableKey) => {
+    expect(() => new GatewayCheckout(options({ publishableKey }))).not.toThrow();
+  });
+
+  it.each(['', '   '])('refuses the session token %j', (sessionToken) => {
+    expect(() => new GatewayCheckout(options({ sessionToken }))).toThrow(/sessionToken/);
+  });
+
+  it('refuses to mount into a missing element', () => {
+    const checkout = new GatewayCheckout(options());
+    expect(() => {
+      checkout.mount(document.getElementById('nowhere'));
+    }).toThrow(/mount/);
+    expect(document.querySelector('iframe')).toBeNull();
   });
 });

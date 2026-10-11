@@ -76,6 +76,9 @@ function PayButton({ sessionToken }: { sessionToken: string }) {
 | `onSuccess({ paymentIntentId, reference })` | The customer saw the success. The window closes itself 3 s later. |
 | `onFailed`, `onExpired`, `onCanceled` (`{ paymentIntentId }`) | Final outcome shown to the customer. Insufficient funds is not final: the customer can top up and retry. |
 | `onClose()` | The window was closed. The intent stays payable until it expires. |
+| `onError({ code: 'checkout_unavailable' })` | The checkout did not answer within 30 s (domain not allowed, handshake refused, network). The SDK already removed it and gave the page back; offer another way to pay or retry. |
+
+`publishableKey` must start with `pk_test_` or `pk_live_` and `sessionToken` must not be empty: the constructor throws otherwise.
 
 ## Then, on your server
 
