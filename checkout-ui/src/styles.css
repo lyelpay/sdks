@@ -30,11 +30,11 @@
   --lp-touch: 44px;
   --lp-card-width: 440px;
   /* Overridden from the merchant colour (ui/theme.ts). */
-  --lp-accent: #fe6a49;
-  --lp-on-accent: #08313a;
+  --lp-accent: #08313a;
+  --lp-on-accent: #ffffff;
   --lp-link: #08313a;
   --lp-focus: #08313a;
-  --lp-halo: rgba(254, 106, 73, 0.28);
+  --lp-halo: rgba(8, 49, 58, 0.28);
 }
 
 * { box-sizing: border-box; }

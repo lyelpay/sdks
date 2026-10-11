@@ -17,7 +17,6 @@ export interface Theme {
   halo: string;
 }
 
-export const LYEL_ORANGE = '#FE6A49';
 export const LYEL_PETROL = '#08313A';
 
 const WHITE: Rgb = { r: 255, g: 255, b: 255 };
@@ -60,7 +59,7 @@ function readableOnWhite(color: Rgb, ratio: number): Rgb {
 
 /** Derives every coloured token from the merchant colour, keeping each one readable. */
 export function buildTheme(primaryColor: string | null): Theme {
-  const accent = (primaryColor && parseHexColor(primaryColor)) || parseHexColor(LYEL_ORANGE) || PETROL;
+  const accent = (primaryColor && parseHexColor(primaryColor)) || PETROL;
   return {
     accent: toHex(accent),
     onAccent: contrastRatio(accent, WHITE) >= BUTTON_TEXT_RATIO ? toHex(WHITE) : toHex(PETROL),
