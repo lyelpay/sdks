@@ -1,66 +1,67 @@
+# @lyel/lyel-pay-js
 
-# 🧾 Lyel Pay SDK
+Browser SDK of the Lyel Pay gateway: shows the checkout as a **modal** (mode A) or an **embedded block** (mode B). The hosted page (mode C) needs no browser SDK.
 
-> SDK JavaScript/TypeScript pour intégrer facilement les paiements via l’API Lyel Pay.
+Full integration guide, with the server side in Node: [`docs/gateway`](../docs/gateway/README.md).
 
-## 🌐 Bilingual / Bilingue
+> **The callbacks do not prove a payment.** Deliver the order on the `payment.completed` webhook, or after reading the intent on your server with your secret key.
 
-- [🇫🇷 Documentation française](./docs/sdk-fr.md)
-- [🇬🇧 English documentation](./docs/sdk-en.md)
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## Install
 
 ```bash
-npm install @lyel/lyel-pay
+npm install @lyel/lyel-pay-js
 ```
 
-### Import & Setup
+## Modal
 
 ```ts
-import { LyelPay, OPERATION_TYPE_ENDPOINTS } from '@lyel/lyel-pay';
+import { GatewayCheckout } from '@lyel/lyel-pay-js';
 
-const sdk = new LyelPay({
-  apiKey: 'YOUR_API_KEY',
-  env: 'sandbox', // or 'production'
+const checkout = new GatewayCheckout({
+  publishableKey: 'pk_test_…',
+  sessionToken, // from your server, which created the intent with its secret key
+  checkoutUrl: 'https://dev.checkout.lyelpay.com', // dev only; defaults to https://checkout.lyelpay.com
+  onSuccess: ({ paymentIntentId, reference }) => showMessage('Merci, nous vérifions votre paiement.'),
+  onFailed: ({ paymentIntentId }) => {},
+  onClose: () => {},
 });
+checkout.open();
 ```
 
-### Basic Flow (Intention ➝ OTP ➝ Verify ➝ Charge)
+## Embedded block
 
 ```ts
-const intention = await sdk.createIntention(OPERATION_TYPE_ENDPOINTS.PAYMENT, {
-  amount: 1000,
-  from: 'MERCHANT_ID',
-  to: 'CLIENT_ID',
-});
-
-await sdk.initOtp({ userId: 'CLIENT_ID' });
-await sdk.verifyOtp({ userId: 'CLIENT_ID', otp: '123456' });
-
-const result = await sdk.charge({ intentionId: intention.id });
-console.log('✅ Payment done:', result);
+checkout.mount(document.getElementById('lyel-pay')!, { framed: false });
+checkout.destroy(); // removes it
 ```
 
----
+## Options
 
-## 📚 Documentation
+`publishableKey`, `sessionToken` (required) · `locale` (`'fr' | 'en'`) · `buttonLabel` (`'PAY' | 'PAY_AMOUNT' | 'CONFIRM_ORDER' | 'DONATE'`) · `checkoutUrl` · callbacks `onReady`, `onSuccess`, `onFailed`, `onExpired`, `onCanceled`, `onClose` (modal only).
 
-> Full guides are available under the `/docs` folder:
-- Use [`docs/sdk-fr.md`](./docs/sdk-fr.md) for the French version
-- Use [`docs/sdk-en.md`](./docs/sdk-en.md) for the English version
+`amount`, `currency` and `merchantName` are ignored: the checkout reads them from the API.
 
----
+## Security
 
-## 📦 Build
+- The parameters ride after the `#` of the checkout address: the session token reaches neither server logs nor a `Referer`.
+- The SDK only listens to messages whose origin is the checkout and whose sender is its own iframe.
+- Before it says anything, the checkout challenges the page that embeds it; the SDK answers from that page. A page that only pretends to be your domain gets no answer through, and the checkout refuses to show.
+
+## Protocol
+
+`lyel-pay-checkout` v1 messages: `challenge`, `ready`, `resize`, `success`, `failed`, `expired`, `canceled`, `close`; the SDK answers `challenge` with `challenge-response`. The source of truth is `checkout-ui/src/messaging/contract.ts`.
+
+## Upgrading from 1.x
+
+- `onSuccess` receives `{ paymentIntentId, reference }` instead of the reference; `onFailed` receives `{ paymentIntentId }`.
+- `open(container)` is now `mount(container)` for the embedded block; `open()` is the modal.
+- The modal no longer closes on a failure: the customer reads the message, then closes it.
+- The v0 client (`LyelPay`, `loadLyelPay`, see `docs/`) targets the retired `/intention` API and will be removed.
+
+## Development
 
 ```bash
-npm run build
+npm install
+npm test && npm run typecheck && npm run lint
+npm run build   # dist/ is versioned: rebuild it in the same commit
 ```
-
-## 🛡 License
-
-MIT 
