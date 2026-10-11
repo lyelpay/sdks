@@ -1,4 +1,4 @@
-import type { Embedding, IntentMode } from './session';
+import type { Embedding } from './session';
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
@@ -21,13 +21,14 @@ function matchesDomain(host: string, pattern: string): boolean {
 }
 
 /**
- * S2: the `origin` announced in the link can be forged; it must be the origin the browser reports for the
- * parent. In LIVE an unknown parent is refused; TEST tolerates it (browsers without ancestorOrigins nor Referer).
+ * S2: the `origin` announced in the link can be forged. When the browser reports the parent origin, it must be the
+ * announced one. When it does not (no ancestorOrigins, Referer stripped by the merchant referrer policy), the
+ * challenge decides, in TEST and LIVE alike: only a parent really on the announced origin receives it and answers.
  */
-export function isParentOriginConfirmed(announced: string, observed: string | null, mode: IntentMode): boolean {
+export function isParentOriginConfirmed(announced: string, observed: string | null): boolean {
   const announcedUrl = parseOrigin(announced);
   if (!announcedUrl) return false;
-  if (observed === null) return mode === 'TEST';
+  if (observed === null) return true;
   const observedUrl = parseOrigin(observed);
   return observedUrl !== null && observedUrl.origin === announcedUrl.origin;
 }

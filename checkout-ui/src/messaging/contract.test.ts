@@ -1,5 +1,6 @@
+import { PROTOCOL_VERSION, WIDGET_MESSAGE_SOURCE } from '@lyel/checkout-protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { createParentChannel, MESSAGE_SOURCE, outcomeMessageFor, PROTOCOL_VERSION } from './contract';
+import { createParentChannel, outcomeMessageFor } from './contract';
 
 describe('createParentChannel', () => {
   it('posts an enveloped message to the verified origin only', () => {
@@ -7,7 +8,7 @@ describe('createParentChannel', () => {
     const channel = createParentChannel({ postMessage }, 'https://shop.cg');
     channel.send({ type: 'resize', height: 512 });
     expect(postMessage).toHaveBeenCalledWith(
-      { source: MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'resize', height: 512 },
+      { source: WIDGET_MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'resize', height: 512 },
       'https://shop.cg',
     );
   });

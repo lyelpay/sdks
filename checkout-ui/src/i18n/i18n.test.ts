@@ -19,6 +19,11 @@ describe('dictionaries', () => {
     expect(dictionaryFor('en').expiredBodyEmbedded).toBe('This payment request has expired. Start the payment again.');
   });
 
+  it('tell the test-mode customer that no code message is sent', () => {
+    expect(dictionaryFor('fr').codeSentTest).toBe('Mode test : aucun message n’est envoyé. Saisissez 000000.');
+    expect(dictionaryFor('en').codeSentTest).toBe('Test mode: no message is sent. Enter 000000.');
+  });
+
   it('put the amount in the "Pay {amount}" label', () => {
     expect(dictionaryFor('fr').buttons.PAY_AMOUNT('15 000 FCFA')).toBe('Payer 15 000 FCFA');
   });

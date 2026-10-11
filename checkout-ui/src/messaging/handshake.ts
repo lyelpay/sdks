@@ -1,7 +1,5 @@
-import { PROTOCOL_VERSION, type WidgetMessage } from './contract';
+import { answersChallenge, type WidgetMessage } from '@lyel/checkout-protocol';
 
-/** Sender of the SDK → widget messages; only the handshake answer exists in protocol v1. */
-export const SDK_MESSAGE_SOURCE = 'lyel-pay-js';
 export const PARENT_CONFIRMATION_TIMEOUT_MS = 5000;
 
 export interface ParentEvent {
@@ -23,20 +21,6 @@ export interface ParentConfirmationOptions {
   nonce: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function answersNonce(data: unknown, nonce: string): boolean {
-  return (
-    isRecord(data) &&
-    data['source'] === SDK_MESSAGE_SOURCE &&
-    data['version'] === PROTOCOL_VERSION &&
-    data['type'] === 'challenge-response' &&
-    data['nonce'] === nonce
-  );
-}
-
 /**
  * S2 handshake: the browser delivers the challenge only if the parent really is on the announced origin, and
  * only that parent can echo the nonce back. Resolves false when no valid answer arrives in time.
@@ -54,7 +38,7 @@ export function awaitParentConfirmation(options: ParentConfirmationOptions): Pro
     }, PARENT_CONFIRMATION_TIMEOUT_MS);
     unsubscribe = options.subscribe((event) => {
       const fromParent = event.source === options.parent && event.origin === options.parentOrigin;
-      if (fromParent && answersNonce(event.data, options.nonce)) settle(true);
+      if (fromParent && answersChallenge(event.data, options.nonce)) settle(true);
     });
     options.send({ type: 'challenge', nonce: options.nonce });
   });

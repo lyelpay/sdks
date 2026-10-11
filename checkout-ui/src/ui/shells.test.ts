@@ -159,6 +159,20 @@ describe('test mode', () => {
   });
 });
 
+describe('test mode, code step', () => {
+  const codeState: CheckoutState = { step: 'code', otp, error: null, noticeUntil: null, resending: false };
+
+  it('says no message is sent, instead of a WhatsApp code that never comes', () => {
+    const html = render('embedded', codeState, { session: { ...session, mode: 'TEST' } });
+    expect(html).toContain('Mode test : aucun message n’est envoyé. Saisissez 000000.');
+    expect(html).not.toContain('Nous avons envoyé un code');
+  });
+
+  it('keeps the WhatsApp text in LIVE', () => {
+    expect(render('embedded', codeState)).toContain('Nous avons envoyé un code à 6 chiffres sur WhatsApp au 06 ••• •• 67.');
+  });
+});
+
 describe('escaping', () => {
   it('never injects the merchant name as markup', () => {
     expect(render('hosted', { step: 'phone', error: null }, { merchantName: '<img src=x onerror=alert(1)>' })).not.toContain('<img src=x');

@@ -1,0 +1,2 @@
+# dist/ is versioned: the widget and the SDK install this package from the repo (file:) and bundle its build.
+!dist/

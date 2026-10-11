@@ -16,6 +16,8 @@ export interface Dictionary {
   notFoundFixNoLink: string;
   createAccount: string;
   codeSent: (maskedPhone: string) => string;
+  /** TEST mode replaces codeSent: no message leaves, the code is always 000000. */
+  codeSentTest: string;
   codeLabel: string;
   codeAria: string;
   confirm: string;

@@ -31,32 +31,37 @@ checkout.open();
 ## Embedded block
 
 ```ts
-checkout.mount(document.getElementById('lyel-pay')!, { framed: false });
+checkout.mount(document.getElementById('lyel-pay'), { framed: false }); // throws if the element is missing
 checkout.destroy(); // removes it
 ```
 
 ## Options
 
-`publishableKey`, `sessionToken` (required) · `locale` (`'fr' | 'en'`) · `buttonLabel` (`'PAY' | 'PAY_AMOUNT' | 'CONFIRM_ORDER' | 'DONATE'`) · `checkoutUrl` · callbacks `onReady`, `onSuccess`, `onFailed`, `onExpired`, `onCanceled`, `onClose` (modal only).
+`publishableKey` (`pk_test_…` or `pk_live_…`), `sessionToken` (required; the constructor throws on a wrong key or an empty token) · `locale` (`'fr' | 'en'`) · `buttonLabel` (`'PAY' | 'PAY_AMOUNT' | 'CONFIRM_ORDER' | 'DONATE'`) · `checkoutUrl` · callbacks `onReady`, `onSuccess`, `onFailed`, `onExpired`, `onCanceled`, `onClose` (modal only), `onError`.
+
+`onError({ code: 'checkout_unavailable' })`: the checkout did not say it was ready within 30 s (domain not allowed, handshake refused, network). The SDK has already removed it and given the page back its scroll and focus.
 
 `amount`, `currency` and `merchantName` are ignored: the checkout reads them from the API.
 
 ## Security
 
+- The modal moves the keyboard focus into the checkout, and gives it back to the element that opened it.
 - The parameters ride after the `#` of the checkout address: the session token reaches neither server logs nor a `Referer`.
 - The SDK only listens to messages whose origin is the checkout and whose sender is its own iframe.
 - Before it says anything, the checkout challenges the page that embeds it; the SDK answers from that page. A page that only pretends to be your domain gets no answer through, and the checkout refuses to show.
 
 ## Protocol
 
-`lyel-pay-checkout` v1 messages: `challenge`, `ready`, `resize`, `success`, `failed`, `expired`, `canceled`, `close`; the SDK answers `challenge` with `challenge-response`. The source of truth is `checkout-ui/src/messaging/contract.ts`.
+`lyel-pay-checkout` v1 messages: `challenge`, `ready`, `resize`, `success`, `failed`, `expired`, `canceled`, `close`; the SDK answers `challenge` with `challenge-response`. The source of truth is the `checkout-protocol` package, shared by the checkout and this SDK.
 
 ## Upgrading from 1.x
 
 - `onSuccess` receives `{ paymentIntentId, reference }` instead of the reference; `onFailed` receives `{ paymentIntentId }`.
 - `open(container)` is now `mount(container)` for the embedded block; `open()` is the modal.
 - The modal no longer closes on a failure: the customer reads the message, then closes it.
-- The v0 client (`LyelPay`, `loadLyelPay`, see `docs/`) targets the retired `/intention` API and will be removed.
+- The v0 client is removed: `LyelPay`, `loadLyelPay`, `OPERATION_TYPE_ENDPOINTS` and the v0 types no longer exist, and neither does the `eventemitter3` dependency. They targeted the retired `/intention` API; use `GatewayCheckout` with an intent your server created.
+- The constructor now throws on a `publishableKey` that is not `pk_test_…`/`pk_live_…` and on an empty `sessionToken`; `mount(null)` throws too.
+- New `onError` callback: see Options.
 
 ## Development
 

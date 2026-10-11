@@ -1,12 +1,9 @@
-/**
- * The `lyel-pay-checkout` postMessage protocol, v1. The widget (checkout-ui, `src/messaging/contract.ts`) is the
- * source of truth: widget messages are `{ source: 'lyel-pay-checkout', version: 1, type, ...payload }`.
- * None of them proves a payment: confirm it with the `payment.completed` webhook or a server-side read.
- */
-export const WIDGET_MESSAGE_SOURCE = 'lyel-pay-checkout';
-export const SDK_MESSAGE_SOURCE = 'lyel-pay-js';
-export const PROTOCOL_VERSION = 1;
+import { isFields, PROTOCOL_VERSION, WIDGET_MESSAGE_SOURCE, type Fields } from './envelope.js';
 
+/**
+ * Widget → SDK. `challenge` is the only message posted before the parent page is confirmed: it carries a nonce the
+ * SDK echoes back from the parent window. Every other message waits for that answer.
+ */
 export type WidgetMessage =
   | { type: 'challenge'; nonce: string }
   | { type: 'ready' }
@@ -17,17 +14,10 @@ export type WidgetMessage =
   | { type: 'canceled'; paymentIntentId: string }
   | { type: 'close' };
 
-export interface ChallengeResponse {
-  source: typeof SDK_MESSAGE_SOURCE;
-  version: typeof PROTOCOL_VERSION;
-  type: 'challenge-response';
-  nonce: string;
-}
+export type WidgetEnvelope = WidgetMessage & { source: typeof WIDGET_MESSAGE_SOURCE; version: typeof PROTOCOL_VERSION };
 
-type Fields = Record<string, unknown>;
-
-function isFields(value: unknown): value is Fields {
-  return typeof value === 'object' && value !== null;
+export function widgetEnvelope(message: WidgetMessage): WidgetEnvelope {
+  return { source: WIDGET_MESSAGE_SOURCE, version: PROTOCOL_VERSION, ...message };
 }
 
 function text(fields: Fields, key: string): string | null {
@@ -63,12 +53,8 @@ function readMessage(fields: Fields): WidgetMessage | null {
   }
 }
 
-/** A widget message, or null for anything else (other senders, v0 protocol, malformed payloads). */
+/** A widget message, or null for anything else (other senders, the v0 protocol, malformed payloads). */
 export function parseWidgetMessage(data: unknown): WidgetMessage | null {
   if (!isFields(data) || data['source'] !== WIDGET_MESSAGE_SOURCE || data['version'] !== PROTOCOL_VERSION) return null;
   return readMessage(data);
-}
-
-export function challengeResponse(nonce: string): ChallengeResponse {
-  return { source: SDK_MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'challenge-response', nonce };
 }

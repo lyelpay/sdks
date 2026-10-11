@@ -12,6 +12,13 @@ export interface CheckoutSuccess extends CheckoutOutcome {
   reference: string;
 }
 
+/** `checkout_unavailable`: the checkout never said it was ready (refused domain, failed handshake, network). */
+export type CheckoutErrorCode = 'checkout_unavailable';
+
+export interface CheckoutError {
+  code: CheckoutErrorCode;
+}
+
 /**
  * These callbacks tell your page what the customer saw. None of them proves a payment: deliver the order only on
  * the `payment.completed` webhook, or after reading the intent on your server with your secret key.
@@ -26,6 +33,8 @@ export interface GatewayCheckoutCallbacks {
   onCanceled?: (outcome: CheckoutOutcome) => void;
   /** Modal only: the customer closed the window. Closing does not cancel the intent; it can be reopened. */
   onClose?: () => void;
+  /** The checkout could not be shown; it has been removed from the page. Offer another way to pay, or retry. */
+  onError?: (error: CheckoutError) => void;
 }
 
 export interface GatewayCheckoutOptions extends GatewayCheckoutCallbacks {

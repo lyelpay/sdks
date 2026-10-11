@@ -5,6 +5,7 @@ import { embeddedHost, hostedHost, type CheckoutHost } from './app/checkout-host
 import { readConfig, type CheckoutConfig } from './config/env';
 import { buildTheme } from './domain/contrast';
 import { parseLaunchParams, type LaunchParams } from './launch/launch-params';
+import { watchPageLifecycle } from './app/page-lifecycle';
 import { createParentChannel } from './messaging/contract';
 import { confirmWindowParent } from './messaging/window-handshake';
 import { buildRenderContext } from './ui/build-context';
@@ -120,22 +121,32 @@ function start(root: HTMLElement): void {
     window.location.assign(url);
   });
 
-  const ticker = window.setInterval(() => {
+  const tick = (): void => {
     const snapshot = controller.snapshot;
     const now = new Date();
     applyLiveUpdates(root, snapshot, buildRenderContext(snapshot, launch, config, now).t, now);
     if (snapshot.session && snapshot.session.expiresAt <= now) controller.expiryReached();
-  }, TICK_MS);
-
+  };
   const resizeObserver = launch.surface === 'embedded' ? new ResizeObserver(announceHeight) : null;
-  resizeObserver?.observe(document.body);
+  let ticker = 0;
+  const resume = (): void => {
+    ticker = window.setInterval(tick, TICK_MS);
+    resizeObserver?.observe(document.body);
+  };
 
-  window.addEventListener('pagehide', () => {
-    window.clearInterval(ticker);
-    resizeObserver?.disconnect();
-    controller.dispose();
+  watchPageLifecycle(window, {
+    hide: () => {
+      window.clearInterval(ticker);
+      resizeObserver?.disconnect();
+      controller.dispose();
+    },
+    restore: () => {
+      resume();
+      controller.pageRestored();
+    },
   });
 
+  resume();
   render(controller.snapshot);
   void controller.start();
 }
