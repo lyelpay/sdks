@@ -1,4 +1,5 @@
-import type { ParentChannel, WidgetMessage } from '../messaging/contract';
+import type { WidgetMessage } from '@lyel/checkout-protocol';
+import type { ParentChannel } from '../messaging/contract';
 
 /** What the checkout may do outside its own card; one adapter per surface. */
 export interface CheckoutHost {

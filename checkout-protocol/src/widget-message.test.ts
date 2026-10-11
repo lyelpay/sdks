@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { challengeResponse, parseWidgetMessage, SDK_MESSAGE_SOURCE, WIDGET_MESSAGE_SOURCE } from './protocol';
+import { PROTOCOL_VERSION, WIDGET_MESSAGE_SOURCE } from './envelope.js';
+import { parseWidgetMessage, widgetEnvelope } from './widget-message.js';
 
-const envelope = { source: WIDGET_MESSAGE_SOURCE, version: 1 };
+const envelope = { source: WIDGET_MESSAGE_SOURCE, version: PROTOCOL_VERSION };
 
 describe('parseWidgetMessage', () => {
   it.each([
@@ -36,8 +37,10 @@ describe('parseWidgetMessage', () => {
   });
 });
 
-describe('challengeResponse', () => {
-  it('echoes the nonce under the SDK envelope', () => {
-    expect(challengeResponse('n-1')).toEqual({ source: SDK_MESSAGE_SOURCE, version: 1, type: 'challenge-response', nonce: 'n-1' });
+describe('widgetEnvelope', () => {
+  it('wraps a message so that parseWidgetMessage reads it back', () => {
+    const message = { type: 'resize', height: 512 } as const;
+    expect(widgetEnvelope(message)).toEqual({ ...envelope, ...message });
+    expect(parseWidgetMessage(widgetEnvelope(message))).toEqual(message);
   });
 });

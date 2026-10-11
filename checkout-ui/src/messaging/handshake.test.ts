@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WidgetMessage } from './contract';
-import { awaitParentConfirmation, PARENT_CONFIRMATION_TIMEOUT_MS, SDK_MESSAGE_SOURCE, type ParentListener } from './handshake';
+import { SDK_MESSAGE_SOURCE, type WidgetMessage } from '@lyel/checkout-protocol';
+import { awaitParentConfirmation, PARENT_CONFIRMATION_TIMEOUT_MS, type ParentListener } from './handshake';
 
 const PARENT = { name: 'parent window' };
 const ORIGIN = 'https://shop.cg';
