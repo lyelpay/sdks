@@ -1,5 +1,6 @@
 import type { CheckoutController } from '../app/checkout-controller';
 import type { Surface } from '../domain/session';
+import { phoneFieldValue } from '../domain/phone';
 import { syncCodeBoxes } from './code-boxes';
 
 function inputValue(form: HTMLFormElement, name: string): string {
@@ -47,6 +48,11 @@ export function bindInteractions(root: HTMLElement, controller: CheckoutControll
   root.addEventListener('input', syncBoxes);
   root.addEventListener('focusin', syncBoxes);
   root.addEventListener('focusout', syncBoxes);
+  root.addEventListener('change', (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.id === 'lp-phone') {
+      event.target.value = phoneFieldValue(event.target.value);
+    }
+  });
 
   if (surface === 'modal') {
     document.addEventListener('keydown', (event) => {

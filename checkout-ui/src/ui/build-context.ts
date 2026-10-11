@@ -4,6 +4,7 @@ import type { CheckoutConfig } from '../config/env';
 import { dictionaryFor } from '../i18n';
 import { formatAmount, shouldShowSecuredBadge } from '../domain/display';
 import { resolveLocale } from '../domain/locale';
+import { phoneFieldValue } from '../domain/phone';
 import type { RenderContext } from './render-context';
 
 export function buildRenderContext(
@@ -28,7 +29,7 @@ export function buildRenderContext(
     buttonLabel: launch.buttonLabel ?? merchant?.buttonLabel ?? 'PAY',
     signupUrl: config.signupUrl,
     showSecuredBadge: shouldShowSecuredBadge(launch.surface, merchant?.showSecuredBadge),
-    phoneDraft: snapshot.phoneDraft,
+    phoneDraft: phoneFieldValue(snapshot.phoneDraft),
     redirecting: snapshot.redirecting,
     now,
   };

@@ -6,6 +6,7 @@ import { readConfig, type CheckoutConfig } from './config/env';
 import { buildTheme } from './domain/contrast';
 import { parseLaunchParams, type LaunchParams } from './launch/launch-params';
 import { createParentChannel } from './messaging/contract';
+import { confirmWindowParent } from './messaging/window-handshake';
 import { buildRenderContext } from './ui/build-context';
 import { bindInteractions, captureTyping, focusStep, restoreTyping } from './ui/dom-binding';
 import { applyLiveUpdates } from './ui/live-updates';
@@ -31,11 +32,30 @@ function observedParentOrigin(): string | null {
   }
 }
 
+function originOf(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const { origin } = new URL(value);
+    return origin === 'null' ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
+interface Surroundings {
+  host: CheckoutHost;
+  confirmParent: () => Promise<boolean>;
+}
+
+const NO_PARENT = (): Promise<boolean> => Promise.resolve(true);
+
 /** Modes A and B live in the SDK iframe; the hosted page must never be framed (anti-clickjacking). */
-function createHost(launch: LaunchParams): CheckoutHost | null {
-  if (launch.surface === 'hosted') return isFramed() ? null : hostedHost(window.location);
-  if (!isFramed() || !launch.parentOrigin) return null;
-  return embeddedHost(createParentChannel(window.parent, launch.parentOrigin));
+function createSurroundings(launch: LaunchParams): Surroundings | null {
+  if (launch.surface === 'hosted') return isFramed() ? null : { host: hostedHost(window.location), confirmParent: NO_PARENT };
+  const parentOrigin = originOf(launch.parentOrigin);
+  if (!isFramed() || !parentOrigin) return null;
+  const channel = createParentChannel(window.parent, parentOrigin);
+  return { host: embeddedHost(channel), confirmParent: confirmWindowParent(channel, parentOrigin) };
 }
 
 function renderUnavailable(root: HTMLElement, launch: LaunchParams | null, config: CheckoutConfig): void {
@@ -57,13 +77,17 @@ function start(root: HTMLElement): void {
   const config = readConfig(import.meta.env);
   applyTheme(document.documentElement, buildTheme(null));
   const launch = parseLaunchParams(window.location);
-  const host = launch ? createHost(launch) : null;
-  if (!launch || !host) {
+  const surroundings = launch ? createSurroundings(launch) : null;
+  if (!launch || !surroundings) {
     renderUnavailable(root, launch, config);
     return;
   }
 
   let previousStep = initialState().step;
+  /** Mode B: the block height is the content height, so it can shrink as well as grow. */
+  const announceHeight = (): void => {
+    controller.notify({ type: 'resize', height: Math.ceil(document.body.getBoundingClientRect().height) });
+  };
   const render = (snapshot: ControllerSnapshot): void => {
     const now = new Date();
     const ctx = buildRenderContext(snapshot, launch, config, now);
@@ -77,11 +101,14 @@ function start(root: HTMLElement): void {
     const firstScreen = previousStep === 'loading';
     if (!sameStep && !(firstScreen && launch.surface === 'embedded')) focusStep(root);
     previousStep = snapshot.state.step;
+    // A resize observed before the parent was confirmed is dropped: every render announces the height again.
+    if (launch.surface === 'embedded') announceHeight();
   };
 
   const controller = new CheckoutController({
     api: createCheckoutApi(config.apiBaseUrl, launch),
-    host,
+    host: surroundings.host,
+    confirmParent: surroundings.confirmParent,
     surface: launch.surface,
     parentOrigin: launch.parentOrigin,
     observedParentOrigin: launch.surface === 'hosted' ? null : observedParentOrigin(),
@@ -100,12 +127,7 @@ function start(root: HTMLElement): void {
     if (snapshot.session && snapshot.session.expiresAt <= now) controller.expiryReached();
   }, TICK_MS);
 
-  const resizeObserver =
-    launch.surface === 'embedded'
-      ? new ResizeObserver(() => {
-          controller.notify({ type: 'resize', height: Math.ceil(document.documentElement.scrollHeight) });
-        })
-      : null;
+  const resizeObserver = launch.surface === 'embedded' ? new ResizeObserver(announceHeight) : null;
   resizeObserver?.observe(document.body);
 
   window.addEventListener('pagehide', () => {

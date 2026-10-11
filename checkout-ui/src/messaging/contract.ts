@@ -4,12 +4,15 @@ import type { CheckoutState } from '../app/checkout-machine';
  * Widget → SDK messages (modes A and B), protocol v1.
  * Every message is `{ source: 'lyel-pay-checkout', version: 1, type, ...payload }`, posted only to the
  * parent origin that passed the allowed-domains check (S2), never to '*'.
+ * `challenge` is the only message posted before the parent is confirmed: it carries a nonce the SDK must echo
+ * back from the parent window (see handshake.ts). Every other message waits for that answer.
  * None of them proves a payment: the merchant confirms with the webhook or a server-side read.
  */
 export const MESSAGE_SOURCE = 'lyel-pay-checkout';
 export const PROTOCOL_VERSION = 1;
 
 export type WidgetMessage =
+  | { type: 'challenge'; nonce: string }
   | { type: 'ready' }
   | { type: 'resize'; height: number }
   | { type: 'success'; paymentIntentId: string; reference: string }

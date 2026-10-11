@@ -29,6 +29,8 @@ export interface ControllerOptions {
   observedParentOrigin: string | null;
   /** Hosted page: the id in the address must be the intent of the token. */
   expectedIntentId: string | null;
+  /** Modes A and B: the S2 handshake, true once the parent window answered the challenge. */
+  confirmParent: () => Promise<boolean>;
   onChange: (snapshot: ControllerSnapshot) => void;
   now?: () => Date;
 }
@@ -44,6 +46,7 @@ export class CheckoutController {
   private verified = false;
   private polls = 0;
   private expiryChecked = false;
+  private parentConfirmation: Promise<boolean> | null = null;
   /** Timers of the current step: cleared on every step change and on dispose. */
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly now: () => Date;
@@ -143,8 +146,8 @@ export class CheckoutController {
   }
 
   /** The single gate every status read goes through: S2 for modes A and B, the path id for mode C. */
-  private acceptSession(session: CheckoutSession): boolean {
-    if (!this.isAllowedHere(session)) {
+  private async acceptSession(session: CheckoutSession): Promise<boolean> {
+    if (!this.isAllowedHere(session) || !(await this.isParentConfirmed())) {
       this.verified = false;
       this.dispatch({ type: 'embeddingRefused' });
       return false;
@@ -152,6 +155,13 @@ export class CheckoutController {
     this.verified = true;
     this.session = session;
     return true;
+  }
+
+  /** The challenge is sent once, after the allowed-domain check, so an unknown page never receives it. */
+  private isParentConfirmed(): Promise<boolean> {
+    if (this.options.surface === 'hosted') return Promise.resolve(true);
+    this.parentConfirmation ??= this.options.confirmParent();
+    return this.parentConfirmation;
   }
 
   private isAllowedHere(session: CheckoutSession): boolean {
@@ -187,7 +197,7 @@ export class CheckoutController {
     const session = await this.read();
     if (!session) return;
     const firstAcceptance = !this.verified;
-    if (!this.acceptSession(session)) return;
+    if (!(await this.acceptSession(session))) return;
     if (firstAcceptance) this.phoneDraft = session.customerPhoneNumber ?? '';
     this.dispatch({ type: eventType, session, now: this.now() });
     if (firstAcceptance) this.notify({ type: 'ready' });

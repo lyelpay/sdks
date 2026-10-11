@@ -1,43 +1,51 @@
-# Getting Started with Lyel Pay Library
+# react-lyel-pay-js
 
-## Introduction
+React bindings of the Lyel Pay gateway checkout, on top of [`@lyel/lyel-pay-js`](../lyel-pay-js/README.md).
 
-react-lyel-pay-js is a React library that allows you to integrate a Lyel Pay payment form from Lyel Pay into your application.
+Full integration guide, with the server side in Node: [`docs/gateway`](../docs/gateway/README.md).
 
-## Installation
+> **The callbacks do not prove a payment.** Deliver the order on the `payment.completed` webhook, or after reading the intent on your server with your secret key.
 
-`npm install react-lyel-pay-js`
+## Install
 
-`yarn add react-lyel-pay-js`
-
-## Usage
-
-```tsx
-import React from 'react';
-import { LyelPayElements } from 'react-lyel-pay-js';
-import { loadLyelPay } from 'react-lyel-pay-js';
-
-// loadLyelPay(apiKey, amount, clientSecret)
-// apiKey: Your Lyel Pay API key
-// amount: The amount to be paid
-// clientSecret: Your Lyel Pay client secret
-const LyelPayPromise = loadLyelPay('YOUR_API_KEY', 1000, 'YOUR_CLIENT_SECRET');
-
-const App = () => {
-  return (
-    <div>
-      <LyelPayElements options={LyelPayPromise} />
-    </div>
-  );
-};
+```bash
+npm install react-lyel-pay-js @lyel/lyel-pay-js
 ```
 
-### API
-react-lyel-pay-js provides the following API:
+## Modal: `useLyelPayCheckout`
 
-* `loadLyelPay`: A function that takes three arguments: apiKey, amount, and clientSecret. It returns a promise that resolves to an object containing the apiKey, initializationDate, amount, and clientSecret.
-* `LyelPayElements`: The main component that renders the Lyel Pay payment form.
-* `apiKey`: The API key to use for the Lyel Pay payment form.
-* `amount`: The amount to be paid.
-* `clientSecret`: The client secret to use for the Lyel Pay payment form.
-* `onPaymentInitiate`: A callback function that is called when the payment is initiated.
+```tsx
+import { useLyelPayCheckout } from 'react-lyel-pay-js';
+
+function PayButton({ sessionToken }: { sessionToken: string }) {
+  const { open, close } = useLyelPayCheckout({
+    publishableKey: 'pk_test_…',
+    sessionToken,
+    onSuccess: ({ reference }) => setMessage('Merci, nous vérifions votre paiement.'),
+  });
+  return <button onClick={open}>Payer</button>;
+}
+```
+
+Or the ready-made `<LyelPayButton publishableKey sessionToken onSuccess={…}>Payer</LyelPayButton>`.
+
+## Embedded block: `<LyelPayCheckout />`
+
+```tsx
+import { LyelPayCheckout } from 'react-lyel-pay-js';
+
+<LyelPayCheckout publishableKey="pk_test_…" sessionToken={sessionToken} framed={false} onSuccess={…} />
+```
+
+## Behaviour
+
+- Options: `publishableKey`, `sessionToken`, `locale`, `buttonLabel`, `checkoutUrl` (`https://dev.checkout.lyelpay.com` on dev), and the callbacks of `@lyel/lyel-pay-js`.
+- A new `sessionToken` (or key, locale, label, address) rebuilds the checkout; a new callback does not: the latest one is always called.
+- Unmounting removes the modal or the block.
+
+## Development
+
+```bash
+npm install
+npm test && npm run typecheck && npm run lint && npm run build
+```

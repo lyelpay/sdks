@@ -473,5 +473,245 @@ var OPERATION_TYPE_ENDPOINTS;
     OPERATION_TYPE_ENDPOINTS["TRANSFER"] = "transfer";
 })(OPERATION_TYPE_ENDPOINTS || (OPERATION_TYPE_ENDPOINTS = {}));
 
-export { OPERATION_TYPE_ENDPOINTS, loadLyelPay };
+const MODAL_LAYER = '2147483000';
+/** Shows the loading skeleton until the widget announces its real height. */
+const INITIAL_BLOCK_HEIGHT = '400px';
+function baseFrame(src, title) {
+    const iframe = document.createElement('iframe');
+    iframe.src = src;
+    iframe.title = title;
+    Object.assign(iframe.style, { border: '0', background: 'transparent', colorScheme: 'normal', display: 'block' });
+    return iframe;
+}
+/** Mode A: the widget draws the backdrop and the dialog itself, so the frame covers the viewport, transparent. */
+function createModalFrame(src) {
+    const iframe = baseFrame(src, 'Lyel Pay');
+    Object.assign(iframe.style, {
+        position: 'fixed',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        zIndex: MODAL_LAYER,
+    });
+    return iframe;
+}
+/** Mode B: as wide as its container (320 to 560 px); the height follows the widget `resize` messages. */
+function createEmbeddedFrame(src) {
+    const iframe = baseFrame(src, 'Lyel Pay');
+    Object.assign(iframe.style, { width: '100%', minWidth: '320px', maxWidth: '560px', height: INITIAL_BLOCK_HEIGHT });
+    return iframe;
+}
+
+const DEFAULT_CHECKOUT_URL = 'https://checkout.lyelpay.com';
+/** The origin every widget message must come from; throws on an address that is not http(s). */
+function checkoutOriginOf(checkoutUrl) {
+    let url;
+    try {
+        url = new URL(checkoutUrl);
+    }
+    catch (_a) {
+        throw new Error(`Lyel Pay: checkoutUrl is not a valid address: ${JSON.stringify(checkoutUrl)}`);
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error(`Lyel Pay: checkoutUrl must be an http(s) address: ${JSON.stringify(checkoutUrl)}`);
+    }
+    return url.origin;
+}
+/**
+ * The parameters ride after the `#`: browsers send the fragment neither to the server nor in a Referer, so the
+ * session token stays out of logs (S11). Amount and merchant name are never sent: the widget reads them from the API.
+ */
+function buildLaunchUrl(params) {
+    const url = new URL('/', checkoutOriginOf(params.checkoutUrl));
+    const hash = new URLSearchParams({
+        pk: params.publishableKey,
+        st: params.sessionToken,
+        origin: params.parentOrigin,
+        mode: params.surface,
+    });
+    if (params.framed === false)
+        hash.set('framed', '0');
+    if (params.locale)
+        hash.set('locale', params.locale);
+    if (params.buttonLabel)
+        hash.set('button', params.buttonLabel);
+    url.hash = hash.toString();
+    return url.toString();
+}
+
+/**
+ * The `lyel-pay-checkout` postMessage protocol, v1. The widget (checkout-ui, `src/messaging/contract.ts`) is the
+ * source of truth: widget messages are `{ source: 'lyel-pay-checkout', version: 1, type, ...payload }`.
+ * None of them proves a payment: confirm it with the `payment.completed` webhook or a server-side read.
+ */
+const WIDGET_MESSAGE_SOURCE = 'lyel-pay-checkout';
+const SDK_MESSAGE_SOURCE = 'lyel-pay-js';
+const PROTOCOL_VERSION = 1;
+function isFields(value) {
+    return typeof value === 'object' && value !== null;
+}
+function text(fields, key) {
+    const value = fields[key];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+}
+function readMessage(fields) {
+    const paymentIntentId = text(fields, 'paymentIntentId');
+    switch (fields['type']) {
+        case 'challenge': {
+            const nonce = text(fields, 'nonce');
+            return nonce ? { type: 'challenge', nonce } : null;
+        }
+        case 'ready':
+            return { type: 'ready' };
+        case 'close':
+            return { type: 'close' };
+        case 'resize': {
+            const height = fields['height'];
+            return typeof height === 'number' && Number.isFinite(height) && height >= 0 ? { type: 'resize', height } : null;
+        }
+        case 'success': {
+            const reference = text(fields, 'reference');
+            return paymentIntentId && reference ? { type: 'success', paymentIntentId, reference } : null;
+        }
+        case 'failed':
+        case 'expired':
+        case 'canceled':
+            return paymentIntentId ? { type: fields['type'], paymentIntentId } : null;
+        default:
+            return null;
+    }
+}
+/** A widget message, or null for anything else (other senders, v0 protocol, malformed payloads). */
+function parseWidgetMessage(data) {
+    if (!isFields(data) || data['source'] !== WIDGET_MESSAGE_SOURCE || data['version'] !== PROTOCOL_VERSION)
+        return null;
+    return readMessage(data);
+}
+function challengeResponse(nonce) {
+    return { source: SDK_MESSAGE_SOURCE, version: PROTOCOL_VERSION, type: 'challenge-response', nonce };
+}
+
+function lockPageScroll() {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+        document.body.style.overflow = previous;
+    };
+}
+/**
+ * Shows the Lyel Pay checkout in the merchant page: `open()` for the modal (mode A), `mount()` for the embedded
+ * block (mode B). The hosted page (mode C) needs no SDK: redirect to the `checkoutUrl` your server received.
+ */
+class GatewayCheckout {
+    constructor(options) {
+        var _a;
+        this.options = options;
+        this.current = null;
+        this.checkoutUrl = (_a = options.checkoutUrl) !== null && _a !== void 0 ? _a : DEFAULT_CHECKOUT_URL;
+        this.checkoutOrigin = checkoutOriginOf(this.checkoutUrl);
+    }
+    /** Mode A: a window over the page; full screen on mobile. Does nothing if the checkout is already shown. */
+    open() {
+        if (this.current)
+            return;
+        const iframe = createModalFrame(this.launchUrl('modal'));
+        this.show(iframe, 'modal', document.body, lockPageScroll());
+    }
+    /** Mode B: a block inside `container`, as wide as it and as tall as its content. */
+    mount(container, mountOptions = {}) {
+        if (this.current)
+            return;
+        const iframe = createEmbeddedFrame(this.launchUrl('embedded', mountOptions.framed));
+        this.show(iframe, 'embedded', container, () => undefined);
+    }
+    /** Removes the modal and reports `onClose`. Closing never cancels the intent. */
+    close() {
+        var _a, _b;
+        if (!this.current)
+            return;
+        this.destroy();
+        (_b = (_a = this.options).onClose) === null || _b === void 0 ? void 0 : _b.call(_a);
+    }
+    /** Removes the checkout from the page and stops listening, without any callback. */
+    destroy() {
+        const current = this.current;
+        if (!current)
+            return;
+        this.current = null;
+        current.stopListening();
+        current.restorePage();
+        current.iframe.remove();
+    }
+    launchUrl(surface, framed) {
+        return buildLaunchUrl({
+            checkoutUrl: this.checkoutUrl,
+            publishableKey: this.options.publishableKey,
+            sessionToken: this.options.sessionToken,
+            parentOrigin: window.location.origin,
+            surface,
+            framed,
+            locale: this.options.locale,
+            buttonLabel: this.options.buttonLabel,
+        });
+    }
+    show(iframe, surface, parent, restorePage) {
+        const listener = (event) => {
+            this.receive(event);
+        };
+        // Listening starts before the iframe loads, so the widget challenge is never missed.
+        window.addEventListener('message', listener);
+        this.current = {
+            iframe,
+            surface,
+            restorePage,
+            stopListening: () => {
+                window.removeEventListener('message', listener);
+            },
+        };
+        parent.appendChild(iframe);
+    }
+    /** S2: only the checkout origin, and only our own iframe, may talk to the SDK. */
+    receive(event) {
+        const current = this.current;
+        const widget = current === null || current === void 0 ? void 0 : current.iframe.contentWindow;
+        if (!current || !widget || event.origin !== this.checkoutOrigin || event.source !== widget)
+            return;
+        const message = parseWidgetMessage(event.data);
+        if (message)
+            this.handle(message, current, widget);
+    }
+    handle(message, current, widget) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        switch (message.type) {
+            case 'challenge':
+                widget.postMessage(challengeResponse(message.nonce), this.checkoutOrigin);
+                return;
+            case 'ready':
+                (_b = (_a = this.options).onReady) === null || _b === void 0 ? void 0 : _b.call(_a);
+                return;
+            case 'resize':
+                if (current.surface === 'embedded')
+                    current.iframe.style.height = `${Math.ceil(message.height)}px`;
+                return;
+            case 'success':
+                (_d = (_c = this.options).onSuccess) === null || _d === void 0 ? void 0 : _d.call(_c, { paymentIntentId: message.paymentIntentId, reference: message.reference });
+                return;
+            case 'failed':
+                (_f = (_e = this.options).onFailed) === null || _f === void 0 ? void 0 : _f.call(_e, { paymentIntentId: message.paymentIntentId });
+                return;
+            case 'expired':
+                (_h = (_g = this.options).onExpired) === null || _h === void 0 ? void 0 : _h.call(_g, { paymentIntentId: message.paymentIntentId });
+                return;
+            case 'canceled':
+                (_k = (_j = this.options).onCanceled) === null || _k === void 0 ? void 0 : _k.call(_j, { paymentIntentId: message.paymentIntentId });
+                return;
+            case 'close':
+                if (current.surface === 'modal')
+                    this.close();
+                return;
+        }
+    }
+}
+
+export { DEFAULT_CHECKOUT_URL, GatewayCheckout, OPERATION_TYPE_ENDPOINTS, loadLyelPay };
 //# sourceMappingURL=index.esm.js.map

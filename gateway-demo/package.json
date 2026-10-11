@@ -1,0 +1,10 @@
+{
+  "name": "@lyel/gateway-demo",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Test shop paying through the Lyel Pay gateway in its 3 modes (modal, embedded block, hosted page), in TEST mode",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
